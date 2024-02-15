@@ -1,0 +1,295 @@
+---
+title: "Differential abundance on species levels - HT vs. 96-deep well"
+---
+## Set up
+```{r setup, include=FALSE}
+mylib = 'C:\\Users\\zuendj\\Documents\\R4Libs'
+mydir = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final"
+myfunctions = "C:/Users/zuendj/Desktop/03_data R/divcom_functions/R"
+.libPaths(mylib)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+# library(phyloseq)
+# library(tidyverse)
+# library(openxlsx)
+# library(microViz)
+# library(rstatix)
+# library(ggpubr)
+# library(plyr)
+# library(ggpmisc)
+```
+
+```{r}
+#load required functions from fconstancias: https://zenodo.org/records/6473394
+setwd(myfunctions)
+source("./phyloseq_taxa_tests.R") 
+source("./phyloseq_normalisation.R") 
+source("./phyloseq_alpha.R") 
+source("./phyloseq_beta.R") 
+source("./phyloseq_heatmap.R")
+source("./phyloseq_taxa_tests.R")
+# source("./functions.R")
+
+#function for getting metadata file
+sample.data.frame <- function(ps) {
+  return(as(phyloseq::sample_data(ps), "data.frame"))}
+```
+
+## Get the phyloseq object
+```{r}
+#get filtered/non-rarified phyloseq
+ps_strain_filt <- readRDS("P:/Shared_documents/Janina_Zuend/08_phd/Raw_Data_PB/05_HT_vs_plate/phyloseq_fbt_filt.RDS")
+```
+## Modify tax table - using MicroViz
+```{r}
+noNA = !is.na(tax_table(ps_strain_filt)[,"Genus"]) & !is.na(tax_table(ps_strain_filt)[,"Species"])
+tax_table(ps_strain_filt)[noNA][,"Species"] = paste(tax_table(ps_strain_filt)[noNA][,"Genus"], tax_table(ps_strain_filt)[noNA][,"Species"])
+
+ps_strain_filt%>%
+  tax_fix()->ps_strain_filt
+```
+
+## Differential Abundance using Aldex 
+The analysis is performed on un-rarified data & using TreeSumarizedExperiments from the mia package
+```{r, echo=FALSE}
+#BiocManager::install("microbiome/mia")
+library(mia)
+library(miaViz)
+library(ALDEx2)
+```
+```{r}
+tse <- makeTreeSummarizedExperimentFromPhyloseq(ps_strain_filt) 
+```
+
+```{r}
+tse_genus <- tse %>% agglomerateByRank(rank = "Genus")
+```
+
+## ALDeX2: Analysis of Enrichmed taxa on specific substrate
+```{r}
+donors <-c("PVFE", "RQPT")
+substrates <-c("SS", "Nut")
+cultivation <-c("Tube", "Plate")
+
+all_response <-data.frame(matrix(ncol=14, nrow=0))
+
+for (h in (1:length(substrates))){
+      for (k in 1:length(donors)){
+        for (c in 1:length(cultivation)){
+          
+    tse_substrates <-tse_genus[ ,tse_genus$substrate %in% c(substrates[h], "basal") &
+                                  tse_genus$donor_name %in% c(donors[k])&
+                                  tse_genus$cultivation_vessel %in% c(cultivation[c])]  
+    
+    count <- as.vector(tse_substrates$substrate)
+     
+     n <- length(grep("basal", count))
+     s <- length(count) - length(grep("basal", count))
+     
+      
+      try({x <- aldex.clr(
+      reads = assay(tse_substrates),
+      conds = c(rep("basal",n), rep(substrates[h],s)), 
+      # 128 recommened for ttest, 1000 for rigorous effect size calculation
+      mc.samples = 1000, 
+      denom = "all",
+      verbose = FALSE)
+      
+    # calculates expected values of the Welch's t-test and Wilcoxon rank test on
+    # the data returned by aldex.clr
+     x_tt <- aldex.ttest(
+        x, 
+        paired.test = FALSE, 
+        verbose = FALSE)
+      
+      
+      # determines the median clr abundance of the feature in all samples and in
+      # groups, the median difference between the two groups, the median variation
+      # within each group and the effect size, which is the median of the ratio
+      # of the between group difference and the larger of the variance within groups
+     x_effect <- aldex.effect(x, CI = TRUE, verbose = FALSE)
+      # combine all outputs 
+      
+      aldex_out <- data.frame(x_tt, x_effect)
+      result <-aldex_out
+      
+      try(result[,c("donor_name")] <-  donors[k], silent = T)
+      try(result[,c("substrate")] <-  substrates[h], silent = T)
+      try(result[,c("vessel")] <-  cultivation[c], silent = T)
+      
+      names(result)[7]<-"rab.win.substrate"
+      
+      result$Genus<-row.names(result)
+      
+      all_response <- rbind(all_response, result)}, silent=T)
+  }}}
+
+```
+
+ 
+```{r}
+setwd(mydir)
+all_response[,c("we.eBH","diff.btw", "Genus",  "substrate", "donor_name", "vessel")]  %>%
+    pivot_wider(values_from = c(diff.btw, we.eBH), names_from = vessel)%>%
+    subset(we.eBH_Plate <0.05 | we.eBH_Tube< 0.05)%>%
+  ggplot( aes(y=diff.btw_Tube, x=diff.btw_Plate))+
+      geom_abline(slope=1, lty=2, lwd=1.25, colour="grey")+
+      geom_vline(xintercept=0, lty=1, lwd=1.25, colour="grey", alpha=0.5)+
+      geom_hline(yintercept=0, lty=1, lwd=1.25, colour="grey", alpha=0.5)+
+      stat_poly_line(color="darkgrey")+
+      geom_point( aes(fill=substrate, shape=donor_name), alpha=0.8, size=4)+
+      stat_correlation(mapping = use_label(c("R")), size=8)+
+      scale_fill_manual(values =c("darkgoldenrod1", "#00BFC4"), labels=c("Dextrin", "Starch"), name= "Fiber")+
+      labs(x="Differences in clr-abundances in plate", y="Differences in clr-abundances in tube")+
+      theme(text= element_text(size = 20), 
+            panel.background = element_rect(fill="white"),
+            panel.border=element_rect(fill=NA))+
+      ggtitle("Fiber-specifically enriched genera")+
+      scale_shape_manual(label=c("Donor 1", "Donor 2"), values=c(21, 24), name= "Donor")+
+      guides(fill = guide_legend(override.aes = list(color = c( "darkgoldenrod1", "#00BFC4")), title = "Fiber"))->plot
+
+                      
+                    
+                    show(plot+theme(legend.position = "none"))
+                    
+                  
+    ggsave(filename = "Enriched_taxa.jpeg", 
+                 path = mydir, 
+                 width = 16,
+                 height = 14,
+                 units = c("cm"))
+            
+            
+             plot %>%
+  ggpubr::get_legend() %>%
+  ggpubr::as_ggplot() + theme_classic() -> plot_legend 
+  
+  
+
+ggsave(filename = "Enriched_taxa.jpeg", 
+       path = mydir, 
+       width = 17,
+       height = 14,
+       units = c("cm"))
+
+
+
+
+63.5/17*16.5
+```
+
+## Analysis on Family level
+```{r}
+tse_family <- tse %>% agglomerateByRank(rank = "Family")
+```
+
+
+```{r}
+    count <- as.vector(tse_family$cultivation_vessel)
+     n <- length(grep("Tube", count))
+     s <- length(count) - length(grep("Tube", count))
+     
+     
+     x <- aldex.clr(
+      reads = assay(tse_family),
+      conds = c(rep("Tube",n), rep("Plate",s)), 
+      # 128 recommened for ttest, 1000 for rigorous effect size calculation
+      mc.samples = 1000, 
+      denom = "all",
+      verbose = FALSE)
+
+     x_tt <- aldex.ttest(
+        x, 
+        paired.test = FALSE, 
+        verbose = FALSE)
+
+        x_effect <- aldex.effect(x, CI = TRUE, verbose = FALSE)
+      aldex_out <- data.frame(x_tt, x_effect)
+      
+  
+aldex_out
+```
+
+## Calculate the clr differences for visualization
+```{r}
+setwd(mydir)
+
+ps_strain_filt %>%
+  physeq_glom_rename(taxrank = "Family", 
+                     speedyseq = TRUE)%>%
+   microbiome::transform("clr") %>% 
+   psmelt()->df_abund
+
+df_abund[, c("OTU", "Abundance", "donor_name", "cultivation_vessel", "substrate", "triplicate")]%>%
+  subset(OTU %in% "Enterobacteriaceae")%>%
+  mutate(cultivation_vessel = factor(cultivation_vessel))%>%
+  ggplot(aes(x=cultivation_vessel, y=Abundance))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(colour=substrate, shape=donor_name) , width=0.1, size=4, alpha =0.75)+
+ 
+ scale_colour_manual(values = c("#F8766D", "darkgoldenrod1", "#00BFC4"
+                                   ),
+                        labels = c(expression(H[2]*O), 
+                                   "Dextrin", 
+                                   "Starch" 
+                                   ))+
+    theme(text= element_text(size = 20), 
+           legend.text = element_text(size = 20),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        axis.text.x = element_text(size=20),
+        axis.title.y= element_text(size = 20),
+        legend.text.align = 0, 
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA),
+        strip.text.y = element_text(size=20, angle=0, face="italic"))+
+    ggtitle("Enterobacteriaceae abundance")+
+  ylab("Clr-abundance")+
+  xlab("")+
+labs(colour="Substrate")+
+   scale_shape_manual(label=c("ABX", "BCY"), values=c(1, 2), name= "Donor")
+
+ggsave(filename = "plate_tube_eneteros..jpeg",
+       path = mydir,
+       width = 17,
+       height = 17,
+       units = c("cm"))
+51.7/14*17
+```
+
+```{r}
+unloadNamespace("miaViz")
+unloadNamespace("mia")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

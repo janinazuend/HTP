@@ -1,0 +1,254 @@
+---
+title: "16S rRNA analysis in Hungate Tubes and 96-deep wells"
+---
+
+## Set up
+```{r setup, include=FALSE}
+mylib = 'C:\\Users\\zuendj\\Documents\\R4Libs'
+mydir = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final"
+myfunctions = "C:/Users/zuendj/Desktop/03_data R/divcom_functions/R"
+.libPaths(mylib)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+# library(phyloseq)
+# library(tidyverse)
+# library(openxlsx)
+# library(microViz)
+# library(rstatix)
+# library(ggpubr)
+# library(plyr)
+library(ggpmisc)
+```
+
+```{r}
+#load required functions from fconstancias: https://zenodo.org/records/6473394
+setwd(myfunctions)
+source("./phyloseq_taxa_tests.R") 
+source("./phyloseq_normalisation.R") 
+source("./phyloseq_alpha.R") 
+source("./phyloseq_beta.R") 
+source("./phyloseq_heatmap.R")
+source("./phyloseq_taxa_tests.R")
+# source("./functions.R")
+
+#function for getting metadata file
+sample.data.frame <- function(ps) {
+  return(as(phyloseq::sample_data(ps), "data.frame"))}
+```
+
+## Get the phyloseq object & meta data file
+```{r}
+setwd("P:/Shared_documents/Janina_Zuend/08_phd/Raw_Data_PB/05_HT_vs_plate")
+
+readRDS("./dada2/phyloseq.RDS") %>%
+  phyloseq_get_strains()%>%
+  #get metadata file
+  physeq_add_metadata(physeq = .,
+                      metadata = "./new_meta.xlsx" %>%
+                        readxl::read_xlsx(),
+                      sample_column = "sample_name") %>%
+  ##subset for the conditions to analyze
+  subset_samples(donor_name %in% c("RQPT", "PVFE") &
+                   substrate %in% c("basal", "Nut", "SS") &
+                   basal %in% "bYCFA"&
+                   inoculum_dilution %in% "1E-04") -> phyloseq
+```
+## Filtering & Subsetting the phyloseq
+```{r}
+###filter for spurious ASVs: threshold in %
+threshold = 0.1
+
+ps_strain_filt<-phyloseq
+# filter per sample to remove all ASV lower in abundance than threshold (%)
+otu_table(phyloseq) %>%
+  as.data.frame() %>%
+  dplyr:: mutate(across(everything(), ~ ifelse(. <= sum(.) * (threshold/100), 0, .))) %>% 
+  otu_table(., taxa_are_rows = TRUE)%>% # remove all ASVs that are not present in any sample
+  filter_taxa(function(x) sum(x > 0) > 0, TRUE) -> otu_table(ps_strain_filt) 
+
+saveRDS(ps_strain_filt, file= "P:/Shared_documents/Janina_Zuend/08_phd/Raw_Data_PB/05_HT_vs_plate/phyloseq_fbt_filt.RDS")	
+```
+
+## Rarefaction 
+```{r}
+ps_strain_filt%>% 
+  phyloseq_check_lib_size(data_color = "sample_name",
+                          data_facet = NULL,
+                          nreads_display = 4932,
+                          first_n = nsamples(ps_strain_filt)) -> lib
+
+min_lib = c(4932)
+
+ps_strain_filt %>%
+  rarefy_even_depth(rngseed = 123,
+                    sample.size = min_lib) -> phyloseq_rare
+```
+
+## Comparison Plate vs. Tube
+### Alpha diversity
+```{r}
+phyloseq_rare%>%
+  plot_richness(measures = c("Observed", "Shannon"))-> alpha_plot
+```
+
+### Correlate alpha diversity
+```{r}
+df_alpha<-alpha_plot$data
+
+#get means 
+left_join(setNames(aggregate(df_alpha$value, 
+                             list(df_alpha$cultivation_vessel, df_alpha$donor_name,  df_alpha$substrate, df_alpha$basal, df_alpha$variable), FUN=mean),
+                   c("cultivation_vessel",  "donor_name", "substrate", "basal", "variable", "mean_observed")),
+          #get standard deviations
+          setNames(aggregate(df_alpha$value, 
+                             list(df_alpha$cultivation_vessel, df_alpha$donor_name,  df_alpha$substrate, df_alpha$basal, df_alpha$variable), FUN=sd),
+                   c("cultivation_vessel",  "donor_name",  "substrate", "basal", "variable","sd")))%>%
+  #pivot wider for correlation plots-Plate and Tube in different columns
+  pivot_wider(., names_from = cultivation_vessel, values_from = c(mean_observed, sd))->observed_wide
+```
+```{r}
+#create plots for the two alpha diversity measures
+variables <-c("Observed", "Shannon")
+axis<-c("Observed ASVs", "Shannon-Index")
+
+  for (j in 1:length(variables)){
+  
+  x<-paste("alpha_div",variables[j], ".jpg")
+  
+  observed_wide %>%
+  subset(variable %in% variables[j])%>%
+    ggplot(aes(x=mean_observed_Plate, y=mean_observed_Tube))+
+    stat_poly_line(color="darkgrey") +
+    geom_abline(slope=1, lty=2, lwd=1, colour="grey")+
+    geom_point(aes(colour=substrate, shape=donor_name), size=6, alpha=0.7) +
+    geom_errorbar(aes(ymin=mean_observed_Tube-sd_Tube, ymax=mean_observed_Tube+sd_Tube, colour=substrate))+
+    geom_errorbarh(aes(xmin=mean_observed_Plate-sd_Plate, xmax=mean_observed_Plate+sd_Plate, colour=substrate))+
+    scale_colour_manual(values = c("#F8766D", "darkgoldenrod1", "#00BFC4"
+                                   ),
+                        labels = c(expression(H[2]*O), 
+                                   "Dextrin", 
+                                   "Starch" 
+                                   ))+
+    labs(x=paste(axis[j], " in plate"), y=paste(axis[j], " in tube"), colour="Fiber", shape="Donor")+
+    stat_correlation(mapping = use_label(c("R")), size=8)+
+    theme(text = element_text(size = 20), 
+        legend.text.align = 0, 
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA))+
+    scale_shape_manual(labels=c("Donor 1", "Donor 2"), values=c(19, 17))+
+    ggtitle("Alpha diversity")->plot
+  
+  show(plot+ theme(legend.position = "none"))
+  
+  ggsave(filename = x, 
+         width = 16.1,
+         path = mydir,
+         height = 14,
+         units = c("cm"))
+  
+  plot %>%
+  ggpubr::get_legend() %>%
+  ggpubr::as_ggplot() + theme_classic() -> plot_legend 
+  
+ggsave(filename = "alpha_div.jpeg",
+      path = mydir,
+       width = 17,
+       height = 14,
+       units = c("cm"))
+}
+```
+
+### Beta diversity 
+```{r}
+dist = "bray"
+ord_meths = c("PCoA")
+
+  plist = llply(as.list(ord_meths), function(i, phyloseq_rare, dist){
+          ordi = ordinate(phyloseq_rare, method=i, distance=dist)
+          plot_ordination(physeq = phyloseq_rare, 
+                          ordination = ordi,
+                          color = "cultivation_vessel", 
+                          shape = "donor_name",
+                          title = "PCoA Bray-Curtis", 
+                          label= "substrate")},
+          phyloseq_rare, 
+          dist)
+
+
+  names(plist) <- ord_meths
+
+  pdataframe = ldply(plist, function(x){
+      df = x$data[, 1:2]
+      colnames(df) = c("Axis_1", "Axis_2")
+      return(cbind(df, x$data))})
+  names(pdataframe)[1] = "method"
+
+
+axis_1<-c("(47.5%)", "(54.3%)")
+axis_2<-c("(20.9%)","(20.9%)")
+
+pdataframe%>%
+      ggplot(aes(Axis_1, Axis_2))+ 
+      scale_shape_manual(values = c( 21, 24), labels=c("ABX", "BCY"))+
+      scale_color_manual(values=c('darkgoldenrod1', "cyan4"))+
+      scale_fill_manual(values = c("#F8766D", "darkgoldenrod1", "#00BFC4"),  labels = c(expression(H[2]*O), "Dextrin", "Starch"))+
+      geom_point(aes(fill=substrate, color = cultivation_vessel, shape=donor_name), size=4, stroke=1.5)+
+      stat_ellipse(data = subset(pdataframe, donor_name %in% "PVFE"), aes(group=cultivation_vessel, colour=cultivation_vessel), lwd=0.8 )+
+      stat_ellipse(data = subset(pdataframe, donor_name %in% "RQPT"), aes(group=cultivation_vessel, colour=cultivation_vessel), lwd=0.8)+
+      ggtitle("Bray-Curtis dissimilarity")+
+      theme(text= element_text(size = 20),
+            legend.text.align = 0, 
+            panel.background = element_rect(fill="white"),
+            panel.border=element_rect(fill=NA))+
+    guides(fill = guide_legend(override.aes = list(color = c("#F8766D", "darkgoldenrod1", "#00BFC4")), 
+                               title = "Fibers"), 
+           colour=guide_legend(override.aes = list(shape=1), 
+                               title="Technique"), 
+           shape= guide_legend(title = "Donor"))+
+    xlab(paste("PCoA1 ", axis_1)) + 
+    ylab(paste("PCoA2 ", axis_2))->p
+
+    
+  show(p+theme(legend.position = "none"))
+    
+  ggsave(filename = "Bray_distance.jpeg", 
+         path = mydir, 
+         width = 17.1,
+         height = 14, 
+         units = c("cm"))
+  
+  p %>%
+  ggpubr::get_legend() %>%
+  ggpubr::as_ggplot() + theme_classic() -> p_legend 
+
+ggsave(filename = "Bray_legend.jpeg", 
+       path = mydir, 
+       width = 17,
+       height = 17,
+       units = c("cm"))
+
+```
+
+
+
+### Statistics on Beta diversity
+```{r}
+### check for homoscedacity
+phyloseq_rare %>%
+  phyloseq::distance(method = "bray") -> bc
+
+phyloseq_rare %>%
+  physeq_betadisper(dm=bc, variable = "cultivation_vessel")-> betadisp
+```
+
+### Adonis2
+```{r}
+#permutations: use default = 999
+vegan::adonis2(bc ~ get_variable(phyloseq_rare,"cultivation_vessel"  ) + get_variable(phyloseq_rare, "donor_name") + get_variable(phyloseq_rare, "substrate"), 
+               p.adjust.methods= "BH")->adonis
+ 
+  print(adonis)
+```
+
+

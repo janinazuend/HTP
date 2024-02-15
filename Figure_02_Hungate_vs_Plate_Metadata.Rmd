@@ -1,0 +1,260 @@
+---
+title: Metadata analysis - HT vs. 96-deep well 
+---
+## Set up
+```{r setup, include=FALSE}
+mylib = 'C:\\Users\\zuendj\\Documents\\R4Libs'
+mydir = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final"
+myfunctions = "C:/Users/zuendj/Desktop/03_data R/divcom_functions/R"
+.libPaths(mylib)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+# library(phyloseq)
+# library(tidyverse)
+# library(openxlsx)
+# library(microViz)
+# library(rstatix)
+# library(ggpubr)
+# library(plyr)
+# library(ggpmisc)
+```
+
+```{r}
+#load required functions from fconstancias: https://zenodo.org/records/6473394
+setwd(myfunctions)
+source("./phyloseq_taxa_tests.R") 
+source("./phyloseq_normalisation.R") 
+source("./phyloseq_alpha.R") 
+source("./phyloseq_beta.R") 
+source("./phyloseq_heatmap.R")
+source("./phyloseq_taxa_tests.R")
+# source("./functions.R")
+
+#function for getting metadata file
+sample.data.frame <- function(ps) {
+  return(as(phyloseq::sample_data(ps), "data.frame"))}
+```
+
+## Get the phyloseq object
+```{r}
+#get filtered/non-rarified phyloseq
+ps_strain_filt <- readRDS("P:/Shared_documents/Janina_Zuend/08_phd/Raw_Data_PB/05_HT_vs_plate/phyloseq_fbt_filt.RDS")
+```
+
+
+```{r}
+df_complete<-sample.data.frame(ps_strain_filt)
+```
+
+
+## Metabolites
+### Calculate total metabolites
+
+```{r}
+df_complete$total_C<-df_complete$succinate + df_complete$propionate + df_complete$acetate + df_complete$butyrate + df_complete$lactate +df_complete$formate
+```
+
+### Calculate relative SCFA
+```{r}
+df_complete_rel <- df_complete %>%
+  mutate(rel_succinate = succinate / total_C,
+         rel_lactate = lactate / total_C,
+         rel_formate = formate / total_C,
+         rel_acetate = acetate / total_C,
+         rel_propionate = propionate / total_C,
+         rel_butyrate = butyrate / total_C)
+```
+
+```{r}
+df_long<-gather(df_complete_rel, metabolite, concentration, "succinate":"butyrate")%>%
+  mutate(concentration = as.numeric(concentration))%>%
+  subset(!seq_fn %in% "SS-42")#remove outlier
+```
+
+## Corelate absolute metabolite concentrations between plate and tube
+```{r}
+left_join(setNames(aggregate(df_long$concentration, list(df_long$cultivation_vessel,  df_long$metabolite, df_long$donor_name,df_long$substrate, df_long$basal), FUN=mean), c("cultivation_vessel", "metabolite", "donor_name",  "substrate", "basal", "mean_conc")),
+          setNames(aggregate(df_long$concentration, list(df_long$cultivation_vessel,  df_long$metabolite, df_long$donor_name, df_long$substrate, df_long$basal), FUN=sd), c("cultivation_vessel", "metabolite", "donor_name",  "substrate", "basal", "sd")))%>%
+  pivot_wider(., names_from = cultivation_vessel, values_from = c(mean_conc, sd))->metabolites_wide
+```
+
+```{r}
+setwd(mydir)
+  title<-paste("Individual metabolite production")
+  
+  metabolites_wide %>%
+    ggplot(aes(x=mean_conc_Plate, y=mean_conc_Tube))+
+    geom_abline(slope=1, lty=2, lwd=1, colour="grey")+
+    stat_poly_line(color="darkgrey") +
+    scale_colour_manual(values = c("coral3", "cyan3", "skyblue3", "darkorange1", "violetred2", "cyan4", "#00A9FF", "#00B8E7", "#8494FF"), 
+                        labels = c("Acetate","Butyrate", "Propionate","Formate","Succinate", "Lactate"))+
+    scale_fill_manual(values=c("#F8766D", "darkgoldenrod1", "#00BFC4"), 
+                      labels = c(expression(H[2]*O), "Dextrin", "Starch" ), name="Fiber")+
+    geom_point(aes(colour=metabolite, shape=donor_name, fill=substrate),  stroke= 2, size=4, alpha=1) +
+    geom_errorbar(aes(ymin=mean_conc_Tube-sd_Tube, ymax=mean_conc_Tube+sd_Tube, colour=metabolite))+
+    geom_errorbarh(aes(xmin=mean_conc_Plate-sd_Plate, xmax=mean_conc_Plate+sd_Plate, colour=metabolite))+
+    labs(x="Metabolites in plate [mM]", y="Metabolites in tube [mM]", colour="metabolite", shape="substrate")+
+    theme(text= element_text(size = 20), 
+        legend.text.align = 0,
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA)
+        )+
+    ggtitle(title)+
+    scale_shape_manual(values = c(21,24), labels=c("Donor 1", "Donor 2"))+
+    stat_correlation(mapping = use_label(c("R")), size=8)+
+    guides(colour=guide_legend(override.aes=list(shape=c(21)), title="Metabolite"),  
+           shape= guide_legend(title = "Donor"), 
+           fill = guide_legend(override.aes = list(color = c("#F8766D", "darkgoldenrod1", "#00BFC4"), title="Fiber")))->plot
+  show(plot+ theme(legend.position = "none"))
+  
+  ggsave(filename = "metabolites.jpeg", 
+         path = mydir,
+         width = 16.5,
+       height = 14,
+       units = c("cm"))
+  
+  
+  plot %>%
+  ggpubr::get_legend() %>%
+  ggpubr::as_ggplot() + theme_classic() -> plot_legend 
+
+
+ggsave(filename = "corr_legend_metabol.jpeg", 
+       path = mydir, 
+       width = 17,
+       height = 14,
+       units = c("cm"))
+
+
+63.5/17*16.5
+```
+## Correlate total metabolites between plate and tube
+
+```{r}
+left_join(setNames(aggregate(df_long$total_C, list(df_long$cultivation_vessel,   df_long$donor_name,df_long$substrate, df_long$basal), FUN=mean), c("cultivation_vessel",  "donor_name",  "substrate", "basal", "mean_conc")),
+          setNames(aggregate(df_long$total_C, list(df_long$cultivation_vessel,  df_long$donor_name, df_long$substrate, df_long$basal), FUN=sd), c("cultivation_vessel",  "donor_name",  "substrate", "basal", "sd")))%>%
+  pivot_wider(., names_from = cultivation_vessel, values_from = c(mean_conc, sd))->total_c_wide
+```
+
+```{r}
+setwd(mydir)
+  title<-c("Total metabolite production")
+  total_c_wide %>%
+    ggplot(aes(x=mean_conc_Plate, y=mean_conc_Tube))+
+    geom_abline(slope=1, lty=2, lwd=1, colour="grey")+
+   stat_poly_line(color="darkgrey") +
+    geom_point(aes(colour=substrate, shape=donor_name), size=6, alpha=0.7) +
+    geom_errorbar(aes(ymin=mean_conc_Tube-sd_Tube, ymax=mean_conc_Tube+sd_Tube, colour=substrate))+
+    geom_errorbarh(aes(xmin=mean_conc_Plate-sd_Plate, xmax=mean_conc_Plate+sd_Plate, colour=substrate))+
+    expand_limits(x=c(0, 55), y=c(0, 55))+
+    ggtitle(t)+
+    scale_colour_manual(values = c("#F8766D", "darkgoldenrod1", "#00BFC4"), labels = c(expression(H[2]*O), "Dextrin", "Starch"), name="Fiber")+
+    labs(x="Metabolites in plate [mM]", y="Metabolites in tube [mM]", colour="Fibers", shape="Donor")+
+    theme(text= element_text(size = 20), 
+        legend.text.align = 0, 
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA)
+        )+
+    scale_shape_manual(values = c(19,17,15), labels=c("Donor 1", "Donor 2"), name="Donor")+
+    stat_correlation(mapping = use_label(c("R")), size=8)+
+    ggtitle(title)+
+    guides(colour=guide_legend(title="Fiber"), shape= guide_legend(title = "Donor"))->plot
+  
+  show(plot+ theme(legend.position = "none"))
+  
+  ggsave(filename = "total_C.jpeg", 
+         path = mydir,
+         width = 16.5,
+       height = 14,
+       units = c("cm"))
+  
+  
+  plot %>%
+  ggpubr::get_legend() %>%
+  ggpubr::as_ggplot() + theme_classic() -> plot_legend 
+
+ggsave(filename = "total_c_legend.jpeg", 
+       path = mydir, 
+       width = 17,
+       height = 14,
+       units = c("cm"))
+
+```
+
+```{r}
+setwd(mydir)
+df_complete%>%
+  ggplot(aes(y=dna_conc, x=cultivation_vessel))+
+  geom_boxplot()+
+   geom_jitter(aes(colour=substrate, shape=donor_name) , width=0.1, size=4, alpha =0.75)+
+   scale_colour_manual(values = c("#F8766D", "darkgoldenrod1", "#00BFC4"), labels = c(expression(H[2]*O), "Dextrin", "Starch"), name="Fiber")+
+  theme(text= element_text(size = 20), 
+        legend.text.align = 0, 
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA),
+           legend.text = element_text(size = 20),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        axis.text.x = element_text(size=20),
+        axis.title.y= element_text(size = 20),
+        strip.text.y = element_text(size=20, angle=0, face="italic"))+
+    ggtitle("DNA concentration")+
+  ylab("Clr-abundance")+
+  xlab("")+
+labs(colour="Substrate")+
+   scale_shape_manual(label=c("ABX", "BCY"), values=c(1, 2), name= "Donor")
+
+ggsave(filename = "dna_conc.jpeg",
+       path = mydir,
+       width = 17,
+       height = 17,
+       units = c("cm"))
+```
+```{r}
+left_join(setNames(aggregate(df_long$dna_conc, list(df_long$cultivation_vessel,   df_long$donor_name,df_long$substrate, df_long$basal), FUN=mean), c("cultivation_vessel",  "donor_name",  "substrate", "basal", "mean_conc")),
+          setNames(aggregate(df_long$dna_conc, list(df_long$cultivation_vessel,  df_long$donor_name, df_long$substrate, df_long$basal), FUN=sd), c("cultivation_vessel",  "donor_name",  "substrate", "basal", "sd")))%>%
+  pivot_wider(., names_from = cultivation_vessel, values_from = c(mean_conc, sd))->dna_conc_wide
+
+title<-c("DNA concentration")
+  dna_conc_wide %>%
+    ggplot(aes(x=mean_conc_Plate, y=mean_conc_Tube))+
+    geom_abline(slope=1, lty=2, lwd=1, colour="grey")+
+   stat_poly_line(color="darkgrey") +
+    geom_point(aes(colour=substrate, shape=donor_name), size=6, alpha=0.7) +
+    geom_errorbar(aes(ymin=mean_conc_Tube-sd_Tube, ymax=mean_conc_Tube+sd_Tube, colour=substrate))+
+    geom_errorbarh(aes(xmin=mean_conc_Plate-sd_Plate, xmax=mean_conc_Plate+sd_Plate, colour=substrate))+
+    expand_limits(x=c(0, 55), y=c(0, 55))+
+    ggtitle(t)+
+    scale_colour_manual(values = c("#F8766D", "darkgoldenrod1", "#00BFC4"), labels = c(expression(H[2]*O), "Dextrin", "Starch"), name="Fiber")+
+    labs(x=expression(paste("DNA in plate ng/", mu, "l" )), y=expression(paste("DNA in tube ng/", mu, "l" )), colour="Fibers", shape="Donor")+
+    theme(text= element_text(size = 20), 
+        legend.text.align = 0, 
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA),
+        legend.text = element_text(size = 20),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        axis.text.x = element_text(size=20),
+        axis.title.y= element_text(size = 20)
+        )+
+    scale_shape_manual(values = c(19,17,15), labels=c("ABX", "BCY"), name="Donor")+
+    stat_correlation(mapping = use_label(c("R")), size=8)+
+    ggtitle(title)+
+    guides(colour=guide_legend(title="Fiber"), shape= guide_legend(title = "Donor"))->plot
+  
+  show(plot)
+  
+  ggsave(filename = "dna_conc.jpeg", 
+         path = mydir,
+         width = 17,
+       height = 17,
+       units = c("cm"))
+  
+  
+```
+

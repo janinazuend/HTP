@@ -1,0 +1,448 @@
+---
+title: "Passage experiment"
+output: html_document
+date: '2023-03-08'
+---
+
+```{r setup, include=FALSE}
+.libPaths('C:\\Users\\zuendj\\Documents\\R4Libs')
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up", cho = TRUE, warning = FALSE, message = FALSE)
+
+# Install Packages:
+# install.packages("rlang")
+# install.packages("tidyr")
+# install.packages("ggbreak")
+# install.packages("caret")
+# library(caret)
+# 
+# library(tidyverse)
+# library(ggplot2)
+# library(tidyr)
+# # install.packages("devtools")
+# # devtools::install_github("slowkow/ggrepel")
+# library(ggrepel)
+# library(ggbreak)
+# library(openxlsx)
+# library(gplots)
+```
+
+```{r}
+htp_with_feces<-read.xlsx("P:/Shared_documents/Serafina Plüss/13_High-throughput_JANINA_part2/02_results/20230415_hplc_HTP.xlsx")
+htp_with_feces%>%
+  subset(!donor %in% "t0")%>%
+  subset(!treatment %in% "fecal")->htp
+
+htp$donor<-recode_factor(htp$donor, "FDS"="WPL")
+
+```
+
+```{r}
+for (i in 1:nrow(htp)){
+  if (htp[i, c("treatment")] == "protein_BHI" | htp[i, c("treatment")] == "protein_YCFA"  | htp[i, c("treatment")] == "BHI_like"  ){
+    htp[i, c("type")] = "protein"
+  }
+  
+  if (htp[i, c("treatment")] == "control"){
+    htp[i, c("type")] = "control"
+  }
+  
+  if (htp[i, c("treatment")] == "metformin" |
+      htp[i, c("treatment")] == "omeprazole"  | 
+      htp[i, c("treatment")] == "ciprofloxacin" |
+       htp[i, c("treatment")] == "5-FU" 
+      ){
+    htp[i, c("type")] = "medication"
+  }
+}
+```
+
+
+```{r}
+# media<-c("control", "protein_YCFA", "protein_BHI")
+# scfa<-c("Lactose", "Glucose", "Galactose", "Succinat", "Lactat", "Formiat", "Acetat", "Propionat", "Isobutyrat", "Butyrat", "Ethanol", "Isovalerat", "Valerat")
+```
+
+```{r}
+# passage$treatment<-recode(passage$treatment, "7C" = "control", "YCFA_like" = "protein_YCFA", "BHI_like" = "protein_BHI")
+# 
+# for (i in 1:11){
+#   for (j in 1:length(media)){
+#     if (passage[ i, c("treatment")] == media[j]){
+#       print(media[j])
+#       for (y in 1:length(scfa)){
+#         col_name<-paste0(scfa[y], "_cor")
+#         # print(media[j])
+#         # print(scfa[y])
+#         # print(passage[i, c(scfa[y])])
+#         # print(blank_hplc[as.numeric(rownames(blank_hplc[blank_hplc$treatment==media[j],])),c(scfa[y])])
+#         # as.numeric(rownames(blank_hplc[blank_hplc$treatment==media[j],]))
+#        passage[i, c(col_name)] <- passage[i, c(scfa[y])] - blank_hplc[as.numeric(rownames(blank_hplc[blank_hplc$treatment==media[j],])),c(scfa[y])]
+#       }
+#     }
+#   }
+# }
+```
+
+
+
+```{r}
+# htp$treatment<-factor(htp$treatment, levels=c("control", "metformin", ))
+
+htp%>%
+  subset(!OD %in% NA)%>%
+  ggplot(aes(x=treatment, y=OD))+
+  geom_boxplot(aes(group=treatment))+
+  geom_point(aes(colour=donor))+
+  # facet_grid(cols=vars(treatment), rows=vars(donor), scales="free_x", labeller = facet_labeller)+
+  facet_grid(~type, scales="free_x", space="free_x")+
+  xlab("Condition")+
+  ylab("OD600")+
+  ggtitle("Growth upon drug or protein treatment")+
+  ylim(c(0,1.6))+
+  theme(axis.text.x = element_text(size=15, angle=90, vjust=0.5, hjust=1),
+        axis.ticks.x = element_blank(),
+            legend.text = element_text(size = 15),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=15),
+        axis.text.y = element_text(size=15),
+        axis.title.y= element_text(size = 20),
+        axis.title.x = element_blank())->p
+
+show(p)
+
+
+ggsave(filename = "OD.jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up/output_drugs",
+       width = 20,
+       height = 14,
+       units = c("cm"))
+```
+
+
+# 2. HPLC
+```{r}
+htp$total_C<-0
+
+scfas<-c("succinate", "lactate" , "formate", "acetate","propionate","butyrate")
+scfas_rel<-c("rel_succinate", "rel_lactate" , "rel_formate", "rel_acetate","rel_propionate","rel_butyrate")
+
+
+for (i in 1:nrow(htp)){
+   for (j in 1:length(scfas)){
+     # print(passage[i,scfas[j]])
+    if(htp[i,scfas[j]] <= 1){
+      htp[i,scfas[j]] = 0}
+
+     # print(passage[i,scfas[j]])
+   }
+  }
+
+
+
+for (i in 1:nrow(htp)){
+  x<-htp[i,c("succinate", "lactate" , "formate", "acetate","propionate","butyrate")]
+  
+  vec<-c(htp[i,c("succinate")],htp[i,c("lactate")],htp[i,c("formate")],htp[i,c("acetate")],htp[i,c("propionate")],htp[i,c("butyrate")])
+  
+  htp[i,c("total_C")]<-  sum(vec[which(vec>0)])
+  
+  for (j in 1:length(scfas)){
+    htp[i,scfas_rel[j]] = htp[i,scfas[j]] / htp[i, c("total_C")]
+  }
+}
+```
+
+# HPLC: drugs - relativ
+
+```{r}
+# cultures$condition<-as.character(cultures$condition)
+# 
+# 
+htp%>%
+  subset(!Lactose %in% NA)%>%
+  subset(!donor %in% "t0")%>%
+  subset(type %in% c("control", "medication"))%>%
+  gather(scfa, conc, "rel_succinate":"rel_butyrate")->sub
+# 
+sub$treatment<-factor(sub$treatment, levels=c("control","metformin", "ciprofloxacin","omeprazole", "5-FU"))
+# 
+# 
+sub$scfa<-factor(sub$scfa, levels=c("rel_acetate", "rel_butyrate","rel_propionate", "rel_formate", "rel_succinate", "rel_lactate" ))
+# 
+# names<-list("H2O"=expression(paste(H[2]*O)),"Glc"= "Glc", "7C"= "6C","7C-Muc"="6C+Muc", "3C"="3C",  "3C+Muc"=  "3C+Muc", "Nut"="Nut", "SS"="SS")
+# 
+# facet_labeller <- function(variable,value){
+#   return(names[value])
+# }
+
+# sub$donor<-factor(sub$donor, levels=c("BFW", "GCB"))
+
+
+sub%>%
+  # subset(donor %in% "GCB")%>%
+  ggplot(aes(x=donor, y=conc, fill=scfa))+
+  geom_bar(stat = "identity")+
+  # facet_grid(cols=vars(treatment), rows=vars(donor), scales="free_x", labeller = facet_labeller)+
+  facet_grid(.~treatment, scales="free_x", space="free_x")+
+  xlab("Condition")+
+  ylab("rel. SCFA concentration")+
+  labs(fill= "Metabolite")+
+  ggtitle("Relative metabolite production")+
+  theme(axis.text.x = element_text(size=15, angle=90, vjust=0.5, hjust=1),
+        axis.ticks.x = element_blank(),
+            legend.text = element_text(size = 15),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=15),
+        axis.text.y = element_text(size=15),
+        axis.title.y= element_text(size = 20),
+        axis.title.x = element_blank())+
+  # scale_x_discrete(labels = c( '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "GMM like"="GMM like", "BHI like", "7C-Muc"="6C", "3C"="3C", "H2O"=expression(paste(H[2]*O)), "Glc"="Glc"))+
+  scale_fill_manual(values=c("coral3", "cyan3", "skyblue3", "darkorange1", "violetred2", "cyan4", "#00A9FF", "#00B8E7", "#8494FF"), 
+                     labels=c("rel_acetate"="Acetate", "rel_butyrate"="Butyrate","rel_propionate"="Propionate", "rel_formate"="Formate", "rel_succinate"="Succinate", "rel_lactate"="Lactate", "rel_isobutyrate"="IsoBut", "rel_valerate"="Valerate", "rel_isovalerate"="IsoVal"))->p
+
+show(p)
+
+ggsave(filename = "scfa_rel_meds.jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up/output_drugs",
+       width = 25,
+       height = 14,
+       units = c("cm"))
+
+```
+
+
+# HPLC: protein - relativ
+
+```{r}
+# cultures$condition<-as.character(cultures$condition)
+
+# 
+htp%>%
+  subset(!Lactose %in% NA)%>%
+  subset(!donor %in% "t0")%>%
+  subset(type %in% c("control", "protein"))%>%
+  gather(scfa, conc, "rel_succinate":"rel_butyrate")->sub
+# 
+aggregate(sub$conc, by=list(sub$scfa, sub$treatment), FUN="mean")
+aggregate(sub$conc, by=list(sub$scfa, sub$treatment), FUN="sd")
+
+
+sub$treatment<-factor(sub$treatment, levels=c("control","protein_YCFA", "protein_BHI","BHI_like"))
+# 
+# 
+sub$scfa<-factor(sub$scfa, levels=c("rel_acetate", "rel_butyrate","rel_propionate", "rel_formate", "rel_succinate", "rel_lactate" ))
+# 
+names<-list("control"=expression(H[2]*O),"protein_YCFA"= "N-source")
+
+ facet_labeller <- function(variable,value){
+   return(names[value])
+ }
+
+# sub$donor<-factor(sub$donor, levels=c("BFW", "GCB"))
+
+
+aggregate(sub$conc, by = list(sub$treatment, sub$scfa), FUN = "sd")
+ 
+
+sub%>%
+  subset(treatment %in% c("control", "protein_YCFA"))%>%
+  subset(!donor %in% c("WDR"))%>%
+  ggplot(aes(x=donor, y=conc, fill=scfa))+
+  geom_bar(stat = "identity")+
+  facet_grid(cols=vars(treatment), scales="free_x", labeller = facet_labeller)+
+  # facet_grid(.~treatment, scales="free_x", space="free_x")+
+  xlab("Condition")+
+  ylab("Metabolite fraction")+
+  labs(fill= "Metabolite")+
+  ggtitle("Individual metabolite production")+
+  theme(axis.text.x = element_text(size=20, angle=90, vjust=0.5, hjust=1),
+        axis.ticks.x = element_blank(),
+            legend.text = element_text(size = 20),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        axis.title.y= element_text(size = 20),
+        axis.title.x = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank())+
+  # scale_x_discrete(labels = c( '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "GMM like"="GMM like", "BHI like", "7C-Muc"="6C", "3C"="3C", "H2O"=expression(paste(H[2]*O), "Glc"="Glc"))+
+  scale_fill_manual(values=c("coral3", "cyan3", "skyblue3", "darkorange1", "violetred2", "cyan4", "#00A9FF", "#00B8E7", "#8494FF"), 
+                     labels=c("rel_acetate"="Acetate", "rel_butyrate"="Butyrate","rel_propionate"="Propionate", "rel_formate"="Formate", "rel_succinate"="Succinate", "rel_lactate"="Lactate", "rel_isobutyrate"="IsoBut", "rel_valerate"="Valerate", "rel_isovalerate"="IsoVal"))->p
+
+show(p+ theme(legend.position = "none"))
+p
+
+ggsave(filename = "scfa_rel_protein_noleg.jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
+       width = 17,
+       height = 10,
+       units = c("cm"))
+
+
+63.5/17*10
+
+```
+
+
+# HPLC: drugs - relativ
+
+```{r}
+# cultures$condition<-as.character(cultures$condition)
+# 
+# 
+htp%>%
+  subset(!Lactose %in% NA)%>%
+  subset(!donor %in% "t0")%>%
+   subset(select = -c(isobutyrate))%>%
+  subset(type %in% c("control", "medication"))%>%
+  subset(treatment %in% c("control","ciprofloxacin", "5-FU"))%>%
+  gather(scfa, conc, "succinate":"butyrate")->sub
+# 
+sub$treatment<-factor(sub$treatment, levels=c("control",
+                                              # "metformin", 
+                                              "ciprofloxacin",
+                                              # "omeprazole", 
+                                              "5-FU"))
+# 
+# 
+sub$scfa<-factor(sub$scfa, levels=c("acetate", "butyrate","propionate", "formate", "succinate", "lactate" ))
+# 
+# names<-list("H2O"=expression(paste(H[2]*O)),"Glc"= "Glc", "7C"= "6C","7C-Muc"="6C+Muc", "3C"="3C",  "3C+Muc"=  "3C+Muc", "Nut"="Nut", "SS"="SS")
+# 
+# facet_labeller <- function(variable,value){
+#   return(names[value])
+# }
+
+# sub$donor<-factor(sub$donor, levels=c("BFW", "GCB"))
+
+
+sub%>%
+  # subset(donor %in% "GCB")%>%
+  ggplot(aes(x=donor, y=conc, fill=scfa))+
+  geom_bar(stat = "identity")+
+  # facet_grid(cols=vars(treatment), rows=vars(donor), scales="free_x", labeller = facet_labeller)+
+  facet_grid(.~treatment, scales="free_x", space="free_x")+
+  xlab("Condition")+
+  ylab("SCFA concentration [mM]")+
+  labs(fill= "Metabolite")+
+  ggtitle("Absolute metabolite production")+
+  theme(axis.text.x = element_text(size=15, angle=90, vjust=0.5, hjust=1),
+        axis.ticks.x = element_blank(),
+            legend.text = element_text(size = 15),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=15),
+        axis.text.y = element_text(size=15),
+        axis.title.y= element_text(size = 20),
+        axis.title.x = element_blank(), panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA))+
+  # scale_x_discrete(labels = c( '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "GMM like"="GMM like", "BHI like", "7C-Muc"="6C", "3C"="3C", "H2O"=expression(paste(H[2]*O)), "Glc"="Glc"))+
+  scale_fill_manual(values=c("coral3", "cyan3", "skyblue3", "darkorange1", "violetred2", "cyan4", "#00A9FF", "#00B8E7", "#8494FF"), 
+                     labels=c("acetate"="Acetate", "butyrate"="Butyrate","propionate"="Propionate", "formate"="Formate", "succinate"="Succinate", "lactate"="Lactate", "isobutyrate"="IsoBut", "valerate"="Valerate", "isovalerate"="IsoVal"))->p
+
+show(p)
+
+ggsave(filename = "scfa_abs_meds.jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up/output_drugs",
+       width = 20,
+       height = 14,
+       units = c("cm"))
+
+```
+
+```{r}
+# cultures$condition<-as.character(cultures$condition)
+# 
+# 
+htp%>%
+  subset(!Lactose %in% NA)%>%
+  subset(!donor %in% "t0")%>%
+  subset(select = -c(isobutyrate))%>%
+  subset(type %in% c("control", "protein"))%>%
+  gather(scfa, conc, "succinate":"butyrate")->sub
+# 
+sub$treatment<-factor(sub$treatment, levels=c("control","protein_YCFA", "protein_BHI","BHI_like"))
+# 
+# 
+sub$scfa<-factor(sub$scfa, levels=c("acetate", "butyrate","propionate", "formate", "succinate", "lactate" ))
+# 
+# names<-list("H2O"=expression(paste(H[2]*O)),"Glc"= "Glc", "7C"= "6C","7C-Muc"="6C+Muc", "3C"="3C",  "3C+Muc"=  "3C+Muc", "Nut"="Nut", "SS"="SS")
+# 
+# facet_labeller <- function(variable,value){
+#   return(names[value])
+# }
+
+# sub$donor<-factor(sub$donor, levels=c("BFW", "GCB"))
+
+
+sub%>%
+  # subset(donor %in% "GCB")%>%
+  ggplot(aes(x=treatment, y=conc, fill=scfa))+
+  geom_bar(stat = "identity")+
+  # facet_grid(cols=vars(treatment), rows=vars(donor), scales="free_x", labeller = facet_labeller)+
+  facet_grid(.~donor, scales="free_x", space="free_x")+
+  xlab("Condition")+
+  ylab("SCFA concentration [mM]")+
+  labs(fill= "Metabolite")+
+  ggtitle("Absolute metabolite production")+
+  theme(axis.text.x = element_text(size=15, angle=90, vjust=0.5, hjust=1),
+        axis.ticks.x = element_blank(),
+            legend.text = element_text(size = 15),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=15),
+        axis.text.y = element_text(size=15),
+        axis.title.y= element_text(size = 20),
+        axis.title.x = element_blank())+
+  # scale_x_discrete(labels = c( '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "GMM like"="GMM like", "BHI like", "7C-Muc"="6C", "3C"="3C", "H2O"=expression(paste(H[2]*O)), "Glc"="Glc"))+
+  scale_fill_manual(values=c("coral3", "cyan3", "skyblue3", "darkorange1", "violetred2", "cyan4", "#00A9FF", "#00B8E7", "#8494FF"), 
+                     labels=c("acetate"="Acetate", "butyrate"="Butyrate","propionate"="Propionate", "formate"="Formate", "succinate"="Succinate", "lactate"="Lactate", "isobutyrate"="IsoBut", "valerate"="Valerate", "isovalerate"="IsoVal"))->p
+
+show(p)
+
+ggsave(filename = "scfa_abs_protein.jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up/output_drugs",
+       width = 20,
+       height = 14,
+       units = c("cm"))
+
+```
+```{r}
+library(rstatix)
+library(ggpubr)
+
+htp%>%
+  # subset(treatment %in% c("control", "protein"))%>%
+  gather(scfa, rel_conc, "rel_succinate":"rel_butyrate")->sub
+
+
+sub %>%
+group_by(scfa) %>%
+  subset(scfa %in% c("rel_acetate", "rel_butyrate", "rel_propionate", "rel_formate", "rel_succinate"))%>%
+wilcox_test(data =., rel_conc ~ treatment, ref.group = "control")->wil
+
+
+stat.test <- wil %>% add_xy_position(x= "treatment", fun="max") %>% add_significance()
+
+
+sub%>%
+  ggplot(aes(x=treatment, y=rel_conc))+
+  geom_boxplot(outlier.colour = NA)+
+  geom_jitter(aes(colour=donor), width=0.1)+
+  facet_grid(rows=vars(scfa))+
+  geom_hline(yintercept=0, linetype="dashed", color = "red")+
+  xlab("Medium")+
+  ylab("relative SCFA concentration")+
+  labs(colour= "Donor")+
+  ggtitle("Relative metabolite production")+
+  stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif")
+
+ggsave(filename = "stats.jpeg", 
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up/output_drugs", 
+       width = 20,
+       height = 30,
+       units = c("cm"))
+  
+```

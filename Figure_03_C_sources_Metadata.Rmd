@@ -1,0 +1,308 @@
+---
+title: "WP1_follow_up"
+output: html_document
+date: '2023-03-08'
+---
+
+```{r setup, include=FALSE}
+.libPaths('C:\\Users\\zuendj\\Documents\\R4Libs')
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up", cho = TRUE, warning = FALSE, message = FALSE)
+# library(rstatix)
+# library(ggplot2)
+
+
+```
+
+```{r}
+meta_data<-read.xlsx("C:/Users/zuendj/Desktop/03_data R/wp1/follow_up/input/meta_data.xlsx")
+
+meta_data%>%
+  subset(!condition %in% "Feces")->cultures
+```
+# 1. Growth
+```{r}
+
+cultures%>%
+  subset(condition %in% c("H2O",
+                          "7C" ,
+                          "3C+Muc",
+                          "7C-Muc",
+                          "3C", 
+                          "Glc",
+                          "BHI like",
+                          "GMM like"))->sub
+  
+sub$condition<-factor(sub$condition, levels = c(  "7C" ,
+                                                  "3C+Muc",
+                                                  "7C-Muc",
+                                                  "3C","Glc", 
+                                                  "H2O",
+                                                 "BHI like",
+                                                 "GMM like"))
+
+
+  sub%>%
+    ggplot(aes(x=condition, y=OD600))+
+  geom_boxplot(outlier.colour = NA)+
+  geom_jitter(aes(colour=donor), width=0.1, size=3)+
+  labs(colour= "Donor")+
+  theme(axis.text.y= element_text(size = 20), 
+            axis.title.y = element_text(size=20), 
+            axis.title.x = element_blank(),
+            axis.text.x = element_text(size=20, angle=90, vjust=0.2, hjust=1),
+            legend.text = element_text(size = 20),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_blank(),
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA))+
+  ggtitle("Growth")+
+  ylab(expression(paste(OD[600])))+
+    ylim(0, 1.3)+
+  scale_x_discrete(labels = c('7C' = '6C+Muc', '3C+Muc' = '3C+Muc',  "7C-Muc"="6C", "3C"="3C", "H2O"="C-depleted", "Glc"="Glucose"))->p
+
+
+show(p)
+ggsave(filename = "od..jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
+       width = 14,
+       height = 16,
+       units = c("cm"))
+
+```
+# 2. HPLC
+```{r}
+cultures$total_C<-0
+
+scfas<-c("succinate", "lactate" , "formate", "acetate","propionate","butyrate")
+scfas_rel<-c("rel_succinate", "rel_lactate" , "rel_formate", "rel_acetate","rel_propionate","rel_butyrate")
+
+
+
+for (i in 1:nrow(cultures)){
+   for (j in 1:length(scfas)){
+     # print(cultures[i,scfas[j]])
+    if(cultures[i,scfas[j]] <= 1){
+      cultures[i,scfas[j]] = 0}
+     
+     # print(cultures[i,scfas[j]])
+   }
+  }
+
+
+
+for (i in 1:nrow(cultures)){
+  x<-cultures[i,c("succinate", "lactate" , "formate", "acetate","propionate","butyrate", "isobutyrate", "valerate", "isovalerate")]
+  
+  vec<-c(cultures[i,c("succinate")],cultures[i,c("lactate")],cultures[i,c("formate")],cultures[i,c("acetate")],cultures[i,c("propionate")],cultures[i,c("butyrate")])
+  
+  cultures[i,c("total_C")]<-  sum(vec[which(vec>0)])
+  
+  for (j in 1:length(scfas)){
+    cultures[i,scfas_rel[j]] = cultures[i,scfas[j]] / cultures[i, c("total_C")]
+  }
+}
+
+
+```
+
+```{r}
+
+cultures$condition<-as.character(cultures$condition)
+
+cultures%>%
+  subset(!condition %in% c( "Nut", "SS"))-> sub
+
+sub$condition<-factor(sub$condition, levels=c( "7C","3C+Muc" ,"7C-Muc", "3C",   "Glc", "H2O","BHI like", "GMM like"))
+
+# t_test(data=sub, total_C ~ condition, ref.group = "H2O")->wil
+# 
+# stat.test <- wil %>% add_xy_position(x= "condition") %>% add_significance()
+# stat.test[, "y.position"] = c(60, 65, 70, 75, 80)
+
+sub%>%
+  ggplot(aes(x=condition, y=total_C))+
+  geom_boxplot(outlier.colour = NA)+
+  geom_jitter(aes(colour=donor), width=0.1, size=3)+
+  xlab("Medium")+
+  ylab("Metabolites [mM]")+
+  labs(colour= "Donor")+
+  theme(axis.text.y= element_text(size = 20), 
+            axis.title.y = element_text(size=20), 
+            axis.title.x = element_blank(),
+            axis.text.x = element_text(size=20, angle=90, vjust=0.2, hjust=1),
+            legend.text = element_text(size = 20),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_blank(),
+        panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA))+
+  ggtitle("Total metabolite production")+
+  # stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif", label.size = 8)+
+  # ylim(0,120)+
+  scale_x_discrete(labels = c('7C' = '6C+Muc', '3C+Muc' = '3C+Muc',  "7C-Muc"="6C", "3C"="3C", "H2O"="C-depleted", "Glc"="Glucose"))->p
+
+ show(p)
+ 
+ ggsave(filename = "total_scfa..jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
+       width = 14,
+       height = 16,
+       units = c("cm"))
+ 
+ 63.5/17*16
+ 
+```
+
+##Respose to Fiber esponse
+
+```{r}
+cultures%>%
+  gather(scfa, rel_conc, "succinate":"butyrate")->sub
+
+
+cond<-unique(sub$condition)
+
+# for (i in 1:length(cond)){
+#   sub%>%
+#     subset(condition %in% cond[i])->t
+# 
+#   t%>%
+#     subset(scfa %in% "rel_formate")%>%
+#     shapiro_test(rel_conc) -> x
+#   
+#  show(x)}
+aggregate(sub$rel_conc, by=list(sub$condition, sub$scfa), FUN="sd")
+
+
+sub %>%
+group_by(scfa) %>%
+  subset(condition %in% c("H2O", "Nut", "SS"))%>%
+  subset(scfa %in% c("acetate", "butyrate", "propionate"))%>%
+wilcox_test(data =., rel_conc ~ condition)->wil
+
+
+stat.test <- wil %>% add_xy_position(x= "scfa", fun="max") %>% add_significance()
+
+
+sub%>%
+  subset(scfa %in% c("acetate", "butyrate", "propionate"))%>%
+  subset(condition %in% c("H2O", "Nut", "SS"))%>%
+  ggplot(aes(x=scfa, y=rel_conc))+
+  geom_boxplot(outlier.colour = NA, aes(position=condition, fill=condition))+
+  geom_jitter(aes(colour=donor, group=condition), position = position_jitterdodge(0.05))+
+  scale_fill_manual(values = c("#F8766D", "darkgoldenrod1", "#00BFC4"), labels = c(expression(H[2]*O), "Dextrin", "Starch" ), name="Fibers")+
+  ylab("Metabolites [mM]")+
+  xlab("")+
+  labs(colour= "Donor")+
+  ggtitle("Fiber-specific metabolic response")+theme(axis.text.y= element_text(size = 20), 
+              axis.title.y = element_text(size=20), 
+              axis.title.x = element_text(size=20),
+              axis.text.x = element_text(size=20),
+              legend.text = element_text(size = 20),
+              legend.title = element_text(size= 20),
+              plot.title = element_text(size=20), panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill=NA),
+        legend.text.align = 0)+
+  scale_x_discrete(labels=c("Acetate", "Butyrate", "Propionate"))+
+  stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif", label.size = 8)->p
+
+
+show(p+ theme(legend.position = "none"))
+  
+  ggsave(filename = "metabolic_response.jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
+       width = 16,
+       height = 11.3,
+       units = c("cm"))
+# 
+p %>%
+ggpubr::get_legend() %>%
+ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
+# 
+ggsave(filename = "metabolic respomse.jpeg",
+path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up_2/output_seq",
+ width = 14,
+ height = 17,
+units = c("cm"))
+  
+63.4/17*11.3
+63.4/17*14
+```
+
+
+
+```{r}
+left_join(setNames(aggregate(sub$rel_conc, by=list(sub$condition, sub$scfa), FUN="mean"), c("condition", "scfa", "rel_conc")),
+          setNames(aggregate(sub$rel_conc, by=list(sub$condition, sub$scfa), FUN="sd"), c("condition", "scfa", "sdv")))->stats_condition
+```
+
+
+
+
+```{r}
+cultures$condition<-as.character(cultures$condition)
+
+
+cultures%>%
+  subset(!condition %in% c( "Nut", "SS"))%>%
+  gather(scfa, conc, "rel_succinate":"rel_butyrate")->sub
+
+aggregate(cultures$rel_succinate, by=list(cultures$condition), FUN="mean")
+aggregate(cultures$rel_succinate, by=list(c(cultures$condition)), FUN="sd")
+aggregate(cultures$rel_formate, by=list(c(cultures$condition)), FUN="mean")
+aggregate(cultures$rel_formate, by=list(c(cultures$condition)), FUN="sd")
+
+aggregate(sub$conc, by=list(sub$scfa), FUN=sd)%>%
+  mutate ( x = round(x*100, digits=1))
+
+sub$condition<-factor(sub$condition, levels=c( "7C","3C+Muc" ,"7C-Muc", "3C",   "Glc", "H2O","BHI like", "GMM like"))
+
+
+sub$scfa<-factor(sub$scfa, levels=c("rel_acetate", "rel_butyrate","rel_propionate", "rel_formate", "rel_succinate", "rel_lactate" ))
+
+names<-list( "7C"= "6C+Muc","3C+Muc"=  "3C+Muc","7C-Muc"="6C", "3C"="3C", "Glc"= "Glucose", "H2O"="C-depleted", "BHI like" = "BHI like", "GMM like" = "GMM like")
+
+facet_labeller <- function(variable,value){
+  return(names[value])
+}
+
+sub%>%
+  ggplot(aes(x=donor, y=conc, fill=scfa))+
+  geom_bar(stat = "identity")+
+  facet_grid(cols=vars(condition), scales="free_x", labeller = facet_labeller)+
+  xlab("Condition")+
+  ylab("Metabolite fraction")+
+  labs(fill= "Metabolite")+
+  ggtitle("Individual metabolite production")+
+  theme(axis.text.x = element_text(size=18, angle=90, vjust=0.5, hjust=1),
+        axis.ticks.x = element_blank(),
+            legend.text = element_text(size = 20),
+            legend.title = element_text(size= 20),
+            plot.title = element_text(size=20),
+          strip.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        axis.title.y= element_text(size = 20),
+        axis.title.x = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank())+
+   scale_fill_manual(values=c("coral3", "cyan3", "skyblue3", "darkorange1", "violetred2", "cyan4", "#00A9FF", "#00B8E7", "#8494FF"), 
+                     labels=c("rel_acetate"="Acetate", "rel_butyrate"="Butyrate","rel_propionate"="Propionate", "rel_formate"="Formate", "rel_succinate"="Succinate", "rel_lactate"="Lactate", "rel_isobutyrate"="IsoBut", "rel_valerate"="Valerate", "rel_isovalerate"="IsoVal"))->p
+
+show(p)
+
+ggsave(filename = "scfa_bcfa_all_cond....jpeg",
+       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
+       width = 45,
+       height = 14,
+       units = c("cm"))
+
+
+62.4/17*45
+
+```
+
+```{r}
+aggregate(cultures$rel_formate, by =list(cultures$condition), FUN=sd)%>%
+  mutate(x = round(x*100, digits=1))
+```
+
