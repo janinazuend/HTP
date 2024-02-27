@@ -1,106 +1,50 @@
 ---
-title: "High-throughput testing of drugs"
+title: "Figure 3: N-sources"
 output: html_document
 date: '2023-04-27'
 ---
+
+# Please be aware that this is a reserach code and far from perfect ;P Cheers!
 
 ```{r setup, echo =FALSE}
 .libPaths('C:\\Users\\zuendj\\Documents\\R4Libs')
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "P:/Shared_documents/Serafina Plüss/20230320_sequencing_results/Janina", cho = TRUE, warning = FALSE, message = FALSE)
 
-
-
-# install.packages("vctrs")
-# install.packages("vegan")
-
-# library(vctrs)
-# library(vegan)
-# install.packages("ggplot2")
-#library(ggplot2)
-#install.packages('tinytex')
-#install.packages('rmarkdown')
-#install.packages("rlang")
-#install.packages("nlme")
-#install.packages("mgcv")
-#install.packages("ape")
-#library(nlme)
-# install.packages("remotes")
-# remotes::install_github("mikemc/speedyseq")
-# install.packages("BiocManager")
-# BiocManager::install("DESeq2")
-#install.packages("fs")
-#install.packages('devtools')
-#install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
-#unload("mia")
-# install.packages("GUniFrac")
-
-# install.packages(
-#   "microViz",
-#   repos = c(davidbarnett = "https://david-barnett.r-universe.dev", getOption("repos"))
-# )
- library(microViz)
-library(openxlsx)
-# # install.packages("ggalluvial")
-# library(ggalluvial)
-# 
-# library(GUniFrac)
- library(ggpubr)
- library(rstatix)
-# library(tinytex)
-# library(rmarkdown)
-# library(rlang)
- library(tidyverse)
-# library(tidyr)
-# library(dplyr)
-# library(mgcv)
-# library(ape)
- # library(phyloseq)
-# library(speedyseq)
-# library(DESeq2)
-# library(plyr)
-# library(fs)
-# library(devtools)
-# library(pairwiseAdonis)
-# # library(metagMisc)
+# library(tidyverse)
+# library(openxlsx)
+# library(microViz)
+# library(rstatix)
 # library(ggpubr)
+# library(plyr)
+# library(ggpmisc)
+# library(phyloseq)
 
-# devtools::install_github("vmikk/metagMisc")
-```
+#load required functions from fconstancias: https://zenodo.org/records/6473394
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_taxa_tests.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_normalisation.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_alpha.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_beta.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_heatmap.R")
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_taxa_tests.R")
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/functions.R")
 
-```{r, echo =FALSE}
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_taxa_tests.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_normalisation.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_alpha.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_beta.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_heatmap.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_taxa_tests.R")
-source("https://raw.githubusercontent.com/fconstancias/metabaRpipe-source/master/Rscripts/functions.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_varia.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_beta.R")
-
-#get metadata file: load this function
+#function for getting metadata file
 sample.data.frame <- function(ps) {
   return(as(phyloseq::sample_data(ps), "data.frame"))}
 ```
 
 ```{r}
 HTP <-readRDS("P:/Shared_documents//Former members/Serafina Plüss/13_High-throughput_JANINA_part2/03_sequencing_data/dada2/phyloseq.RDS")
-
 ```
 
 ### Get and update metadata file
 ```{r, echo=FALSE}
-
 HTP%>%
   physeq_add_metadata(physeq = .,
                       metadata = "P:/Shared_documents/Former members/Serafina Plüss//13_High-throughput_JANINA_part2/03_sequencing_data/mapping_file_updated.xlsx" %>%
                         readxl::read_xlsx(),
                       sample_column = "sample_name") -> HTP
-
-
-
-
 meta_htp<-sample.data.frame(HTP)
 meta_htp$donor <- recode_factor(meta_htp$donor, "FDS" = "WPL")
 meta_htp$inoculation<-factor(meta_htp$inoculation, levels = c("0.1", "0.01", "feces"))
@@ -134,9 +78,7 @@ ps_strain_filt%>%
 
 
 
-### Rarefaction
-it is recommended to do rarefaction for alpha and beta diversity analysis
-
+## Rarefaction
 ```{r}
 ps_strain_filt %>%
   rarefy_even_depth(rngseed = 123,
@@ -144,8 +86,8 @@ ps_strain_filt %>%
                     # sample.size = 5000
                     ) -> HTP_rare
 ```
-##Alpha diversity
 
+## Alpha diversity
 ```{r}
 # unload("mia")
 #alpha diversity
@@ -153,9 +95,7 @@ HTP_rare%>%
   phyloseq_alphas(phylo = TRUE) -> alphas
 ```
 
-
 ```{r}
-x<-paste("OBSERVED_alpha diversity.jpg")
 title<-paste("Alpha diversity")
 
 alphas%>%
@@ -163,14 +103,18 @@ alphas%>%
   subset(treatment %in% c("feces", "control",
                           "protein_YCFA"))->alphas_proteins
 
-alphas_proteins$treatment<-factor(alphas_proteins$treatment, levels=c("feces", "control",
-                          "protein_YCFA"))
+alphas_proteins$treatment<-factor(alphas_proteins$treatment, 
+                                  levels=c("feces", 
+                                           "control",
+                                           "protein_YCFA"))
 
-alphas_proteins$sample_type <-factor(alphas_proteins$sample_type, levels=c("feces", "culture"))
+alphas_proteins$sample_type <-factor(alphas_proteins$sample_type, 
+                                     levels=c("feces", "culture"))
 
 
 alphas_proteins%>%
   subset(!donor %in% "WDR")->alphas_proteins
+
 aggregate(alphas_proteins$observed, by=list(alphas_proteins$treatment), FUN=median)
 
 alphas_proteins%>%
@@ -180,12 +124,10 @@ alphas_proteins%>%
   scale_fill_manual(values = c("grey", "darkgoldenrod1", "cyan4"),
    labels = c("feces", expression(paste(H[2]*O)), "N-source"), 
                        name="Supplementation")+
-  
-  # facet_grid(scale="free", space="free_x", cols=vars(sample_type)) +
   geom_boxplot(aes(group=treatment, fill=treatment), outlier.shape = NA) +
   geom_jitter(aes(colour =donor, group=treatment), position = position_jitterdodge(0.1) , size=3, alpha=0.75)+
-  ylab("Observed ASVs") + xlab(NULL) +
-  # scale_colour_manual(values=c("grey",  'darkgoldenrod1'))+
+  ylab("Observed ASVs") + 
+  xlab(NULL) +
   theme(axis.text.y= element_text(size = 20), axis.ticks.x=element_blank(),
             axis.title.y = element_text(size=20), 
             axis.title.x = element_text(size=20),
@@ -200,7 +142,7 @@ alphas_proteins%>%
   # stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif")+
   labs(colour="Donor")->alpha
 
- show(alpha+ theme(legend.position = "none"))
+ show(alpha)
 
 ggsave(filename = "alpha_proteins.jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
@@ -209,20 +151,6 @@ ggsave(filename = "alpha_proteins.jpeg",
        units = c("cm"))
 
 
-alpha %>%
-  ggpubr::get_legend() %>%
-  ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
-
-
- ggsave(filename = "alpha_legend_proteins.jpeg",
-       path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up_2/output_seq",
-       width = 17,
-       height = 14,
-       units = c("cm"))
- 
- 
- 51.7/14*10
- 
 ```
 
 ```{r}
@@ -230,19 +158,11 @@ alphas_proteins%>%
   subset(!donor %in% "WDR")->percent
 
 aggregate(percent$observed, by=list(percent$treatment), FUN=median)
-
 ```
 
 ##Barplots
-
 ### Compositional bar plots for each donor
-
 ```{r}
-# phylo_C@otu_table
-# 
-# phylo_C@tax_table
-
-
 noNA = !is.na(tax_table(HTP_rare)[,"Genus"]) & !is.na(tax_table(HTP_rare)[,"Species"])
 tax_table(HTP_rare)[noNA][,"Species"] = paste(tax_table(HTP_rare)[noNA][,"Genus"], tax_table(HTP_rare)[noNA][,"Species"])
 
@@ -254,28 +174,17 @@ tax_table(HTP)[noNA][,"Species"] = paste(tax_table(HTP)[noNA][,"Genus"], tax_tab
 
 HTP%>%
   tax_fix()->HTP
-  
-# tax_fix_interactive(fix)
 ```
 
-
-##Bar plots: Proteins
 ```{r}
-
-
 HTP_rare%>%
   subset_samples(experiment %in% "HTP")%>%
   subset_samples(treatment %in% c( "control",
                           "protein_YCFA", "feces"))-> HTP_protein
 
-
-# 
 meta_htp<-sample.data.frame(HTP_protein)
 
 meta_htp$treatment<-factor(meta_htp$treatment, levels=c("feces", "control", "protein_YCFA"))
-# meta_htp$treatment <- recode(meta_htp$treatment , "control" = expression(H[2]*O), "protein_YCFA" = expression(N-sources), "feces" =expression(Feces))
-# 
-# meta_htp$treatment<-as.factor(meta_htp$treatment)
 
 sample_data(HTP_protein)<-meta_htp
 
@@ -323,16 +232,11 @@ p_hist + facet_grid(~donor, scales = "free_x", space = "free_x", drop = TRUE)+
         legend.title = element_text(size= 20),
         plot.title = element_text(size=20), panel.spacing = unit(0.2, "cm")) + scale_y_continuous(breaks=c(0.25, 0.5, 0.75))+ ggtitle("Taxonomic distribution in cultures with and without additional proteins")-> p_hist
 
-# show(p_hist+ theme(legend.position = "none"))
-
-
 ggsave(filename = "proteins_bar.jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
        width = 35,
        height = 17,
        units = c("cm"))
-
-63.5/17*35
 ```
 
 
@@ -340,13 +244,6 @@ ggsave(filename = "proteins_bar.jpeg",
 ## Distance plots of pairwise comparisons
 
 ```{r}
-# source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_beta.R")
-# unload("dplyr")
-# unload("tidyr")
-# # # 
-# library(tidyverse)
-# library(dplyr)
-
 HTP_rare %>%
   subset_samples(!donor %in% "WDR")%>%
   subset_samples(!experiment %in% c("passage"))%>%
@@ -363,13 +260,8 @@ sub %>%
   phyloseq_distance_boxplot(p = ., 
                             dist = bc, 
                             d = "treatment") -> out # column in metadata for comparaisons
-
-
 out$plot
-
 setNames(as.data.frame(out$matrix),c("sample_name", "sample_name_comp", "value", "condition_comp", "comparison")) -> distances
-
-
 distances%>%
   subset(comparison %in% c("feces"))-> distances
 
@@ -383,8 +275,6 @@ joined_2$sample_type<-factor(joined_2$sample_type, levels= c("feces", "culture")
 title="Distances between feces and cultures"
 
 unique(joined_2$condition_comp)
-
-
 
 sample.data.frame(sub)[,c(1,3)]%>%
   subset(sample_name %in% c("JZ-001","JZ-002", "JZ-003", "JZ-004", "JZ-005", "JZ-006", "JZ-007", "JZ-008"))%>%
@@ -404,37 +294,10 @@ joined_3%>%
 
 match$condition_comp<-factor(match$condition_comp, levels=c("control","protein_YCFA"))
 
-# cond<-unique(sub$condition_comp)
-#   
-# for (i in 1:length(cond)){
-#   sub%>%
-#     subset(condition_comp %in% cond[i])->t
-#  shapiro_test(t$value)->x
-#  show(x)
-#  
-#  
-# }
- 
-# sub$condition_comp<-factor(sub$condition_comp, levels=c("7C",
-#                                                  "3C+Muc",
-#                                                  "7C-Muc" ,
-#                                                  "3C" ,
-#                                                  "SS" ,
-#                                                  "Nut" ,
-#                                                  "Glc" ,
-#                                                  "H2O"))
-# 
-
-# t_test(data=sub, value ~ condition_comp)->wil
-
-# stat.test <- wil %>% add_xy_position(x= "condition_comp") %>% add_significance()
-
 match%>%
-  # mutate(condition_comp = fct_reorder(condition_comp, sub$mean_value))%>%
   ggplot(aes(y=value, x=condition_comp))+
-  # scale_color_manual(values=c( "coral4", 'black'))+
-   scale_fill_manual(values = c("darkgoldenrod1", "cyan4"),
-   labels = c( expression(paste(Control~(H[2]*O))), "N-source"), 
+  scale_fill_manual(values = c("darkgoldenrod1", "cyan4"),
+  labels = c( expression(paste(Control~(H[2]*O))), "N-source"), 
                        name="Supplementation")+
   
   geom_boxplot(aes(group=condition_comp, fill=condition_comp),  outlier.shape =  NA)+
@@ -451,38 +314,27 @@ match%>%
         axis.ticks.x = element_blank(), panel.background = element_rect(fill="white"),
         panel.border=element_rect(fill=NA)
         )+
-  # stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif")+
   scale_x_discrete(labels = c('control' = expression(H[2]*O~(control)), 'protein_YCFA' = 'N-source'))+
   ggtitle("Beta diversity")+
   ylab("Distance")+
   labs(colour="Donor")->p
 
-# show(p)
+ show(p)
 
-  show(p+ theme(legend.position = "none"))
+  
   
   ggsave(filename = "Beta_diversity_dist.jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
        width = 7,
        height = 7,
        units = c("cm"))
-
-#   p %>%
-#   ggpubr::get_legend() %>%
-#   ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
-# 
-# ggsave(filename = "Beta_diversity_legend.jpeg",
-#        path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up_2/output_seq",
-#        width = 14,
-#        height = 17,
-#        units = c("cm"))
 ```
 
 ```{r}
 aggregate(match$value, by=list(match$treatment), FUN=median)
 ```
-```{r}
 
+```{r}
 HTP_rare %>%
   subset_samples(!donor %in% "WDR")%>%
   subset_samples(!experiment %in% c("passage"))%>%
@@ -493,18 +345,10 @@ HTP_rare %>%
    psmelt() ->df_abund
 
 clr_c<-left_join(df_abund, as.data.frame(HTP_rare@tax_table))
-
 mean_abund<-setNames(aggregate(clr_c$Abundance, by=list(clr_c$Family), FUN = "mean"), c("Family", "abund"))
-
 clr_c<-left_join(clr_c, mean_abund)
-
 mean_abund$Family<-as.factor(mean_abund$Family)
 
-# clr_c%>%
-#   mutate(Family = fct_reorder(Family, clr_drug$abund)) ->hoi
-
-# ordered<-unique(as.character(hoi$Family))[1:15]
-# clr_drug$treatment<-factor(clr_drug$treatment, levels=c("DMSO", "omeprazole",  "ciprofloxacin","b_5-FU","a_control"))
 
 clr_c%>%
   subset(Family %in% c("Enterobacteriaceae"))->clr_entero
@@ -552,7 +396,6 @@ clr_diff<-left_join(clr_diff, mean_abund)
 clr_diff$condition<-factor(clr_diff$condition, levels=c( "protein_YCFA", "control"))
 
 clr_diff%>%
-  # mutate(Family = fct_reorder(Family, clr_diff$abund))%>%
   ggplot(aes(x=diff, y=condition))+
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey", size=1)+
    geom_boxplot( outlier.shape = NA, aes(fill=condition))+
@@ -573,32 +416,15 @@ clr_diff%>%
         legend.text.align = 0 )+
       ylab("")+xlab("Differences in clr-abundances")+labs(colour="Donor")+
   scale_y_discrete(labels =c(expression(paste(Control~(H[2]*O))), "N-source"))+
-      ggtitle(expression(paste(italic("Enterobacteriaceae"), " levels")))->p
+  ggtitle(expression(paste(italic("Enterobacteriaceae"), " levels")))->p
 
-show(p+ theme(legend.position = "none"))
-  # stat_pvalue_manual(stat.test,  label = "p.adj.signif", label.size = 8)
+show(p)
 
 ggsave(filename = "N_sources_bars.jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
        width = 10,
        height = 7,
        units = c("cm"))
-
-
-p %>%
-  ggpubr::get_legend() %>%
-  ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
-
-
- ggsave(filename = "legend_proteins.jpeg",
-       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
-       width = 17,
-       height = 14,
-       units = c("cm"))
-
-
-51.7/14*20
-65.3/17*7
 ```
 
 ```{r}
