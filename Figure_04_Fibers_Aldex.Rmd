@@ -2,77 +2,36 @@
 title: "C-sources & 8 donors"
 ---
 
-Link to Florentin's github page: https://htmlpreview.github.io/?https://github.com/fconstancias/DivComAnalyses/blob/master/SOP/community_analyses/Microbiome_R_tutorial.html#alpha-diversity
-
-1. Getting ready: load all packages
--newest version of R
--rtools required 
-
-
 ```{r setup, echo =FALSE}
 .libPaths('C:\\Users\\zuendj\\Documents\\R4Libs')
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "C:/Users/zuendj/Desktop/03_data R/wp1", cho = TRUE, warning = FALSE, message = FALSE)
 
-#install.packages('tinytex')
-#install.packages('rmarkdown')
-#install.packages("rlang")
-#install.packages("nlme")
-#install.packages("mgcv")
-#install.packages("ape")
-#library(nlme)
-# install.packages("remotes")
-# remotes::install_github("mikemc/speedyseq")
-# install.packages("BiocManager")
-# BiocManager::install("DESeq2")
-#install.packages("fs")
-#install.packages('devtools')
-#install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
-#unload("mia")
-# library(ggpubr)
-# library(tinytex)
-# library(rmarkdown)
-# library(rlang)
 # library(tidyverse)
-# library(dplyr)
-# library(mgcv)
-# library(ape)
-# library(phyloseq)
-# library(speedyseq)
-# library(DESeq2)
+# library(openxlsx)
+# library(microViz)
+# library(rstatix)
+# library(ggpubr)
 # library(plyr)
-# library(fs)
-# library(devtools)
-# library(pairwiseAdonis)
-# #install.packages('ggpmisc')
 # library(ggpmisc)
-# # install.packages("ragg")
-# library(ragg)
-# library(ggrepel)
-```
+# library(phyloseq)
 
-```{r, echo =FALSE}
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_taxa_tests.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_normalisation.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_alpha.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_beta.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_heatmap.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_taxa_tests.R")
-source("https://raw.githubusercontent.com/fconstancias/metabaRpipe-source/master/Rscripts/functions.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_varia.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_beta.R")
+#load required functions from fconstancias: https://zenodo.org/records/6473394
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_taxa_tests.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_normalisation.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_alpha.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_beta.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_heatmap.R")
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_taxa_tests.R")
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/functions.R")
 
-#get metadata file: load this function
+#function for getting metadata file
 sample.data.frame <- function(ps) {
   return(as(phyloseq::sample_data(ps), "data.frame"))}
 ```
-## 1. Get the phyloseq object 
+## Get the phyloseq object 
 ```{r}
 phyloseq <-readRDS("P:/Shared_documents/Former members/Serafina Plüss/20230320_sequencing_results/Janina/dada2/phyloseq_phylo/phyloseq_phylo.RDS")
-
-# phyloseq%>%
-#   phyloseq_get_strains()->phyloseq
-
 ```
 
 ### Get and update metadata file
@@ -83,17 +42,11 @@ phyloseq%>%
                       metadata = "P:/Shared_documents/Former members/Serafina Plüss/20230320_sequencing_results/Janina/metadata_file_janina.xlsx" %>%
                         readxl::read_xlsx(),
                       sample_column = "sample_name") -> phyloseq
-
-
 ```
-```{r}
-# unload("mia")
-# unload("microViz")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_normalisation.R") 
 
+```{r}
 phyloseq %>% 
   phyloseq_get_strains()  -> phyloseq
-
 
 ps_strain_filt <- phyloseq
 
@@ -111,60 +64,39 @@ phyloseq <- ps_strain_filt %>%
   filter_taxa(function(x) sum(x > 0) > 0, TRUE)
 ```
 
+# Fix the tax table
 ```{r}
-library(microViz)
-# phylo_C@otu_table
-
 noNA = !is.na(tax_table(phyloseq)[,"Genus"]) & !is.na(tax_table(phyloseq)[,"Species"])
 tax_table(phyloseq)[noNA][,"Species"] = paste(tax_table(phyloseq)[noNA][,"Genus"], tax_table(phyloseq)[noNA][,"Species"])
-
-
 
 phyloseq%>%
   tax_fix()->phyloseq
 
 tax<-as.data.frame(phyloseq@tax_table)
-
-
 tax$Genus<-gsub("_7","", tax$Genus)
 tax$Species<-gsub("_7","", tax$Species)
 tax$Genus<-gsub("_9","", tax$Genus)
 tax$Species<-gsub("_9","", tax$Species)
 
-
-
-# 
-# 
-# 
 tax$Genus<-gsub("Incertae Sedis","Ruminococcaceae", tax$Genus)
 tax$Species<-gsub("Incertae Sedis","Ruminococcaceae", tax$Species)
 tax$Species<-gsub("Candidatus Soleaferrea","Ruminococcaceae", tax$Species)
 tax$Genus<-gsub("Candidatus Soleaferrea","Ruminococcaceae", tax$Genus)
-
-# tax_fix_interactive(phyloseq)
-
-# unique(tax$Genus)
-
 ```
-
 
 ```{r}
 tax_table(phyloseq)<-as.matrix(tax, row_names =T)
 ```
 
-
-
 ```{r}
 phyloseq%>%
   subset_samples(experiment %in% "high-throughput")%>%
-  subset_samples(!donor_name %in% c("WDR"))%>%
   subset_samples(condition %in% c("SS" , "Nut" , "H2O"))->phylo_fibers
 
 ```
 
 ```{r, echo=FALSE}
 #BiocManager::install("microbiome/mia")
-
 library(mia)
 library(miaViz)
 library(ALDEx2)
@@ -177,19 +109,12 @@ tse_family <- fibers %>% agglomerateByRank(rank = "Genus")
 
 ###Aldex: NO Prevalence filter-> filter later with abundance
 ```{r}
-
 substrates <-c("SS", "Nut")
-
-
 all <-data.frame(matrix(ncol=14, nrow=0))
 
 for (i in (1:length(substrates))){
   tse_substrates <-tse_family[ , tse_family$condition %in% c(substrates[i], "H2O")]
-  
-
-      # tse <- subsetByPrevalentTaxa(tse_substrates, detection = 0, prevalence=0.5, include_lowest= TRUE)
-      
-      result_name <- paste(substrates[i])
+  result_name <- paste(substrates[i])
       print(result_name)
       
       count <- as.vector(tse_substrates$condition)
@@ -217,14 +142,11 @@ for (i in (1:length(substrates))){
       # combine all outputs 
       
       aldex_out <- data.frame(x_tt, x_effect)
-      
-      
-      
-      result <-aldex_out
+       result <-aldex_out
       
             result[,14] <- result_name
-print(colnames(result))
-      result[,14] <- result_name
+            print(colnames(result))
+            result[,14] <- result_name
 
 
       
@@ -233,29 +155,12 @@ print(colnames(result))
       result$Genus<-row.names(result)
       
       all <- rbind(all, result)
-      
-     
-      
       }
 
-
-
 join(all, as.data.frame(phyloseq@tax_table))->out
-
 all %>%
   filter(wi.eBH <0.05)->out
 
-
-out[, c("wi.eBH", "V14", "diff.btw")]
-
-
-
-BACKUP<-all
-
-
-
-  hist(all$effect)
-    hist(all$diff.btw)
   
 ```
 
@@ -293,19 +198,8 @@ ggsave(filename = "fibers_all_genus.jpeg",
        width = 20,
        height = 30,
        units = c("cm"))
-
-65.3/17*20
-65.3/17*30
-    
 ```
 
-```{r}
-all%>%
-  subset(Genus %in% c("Fusicatenibacter", "Bacteroides", "Lachnospiraceae ND3007 group"))
-
-all%>%
-  subset(Genus %in% c("Faecalibacterium", "Agathobacter", "Blautia"))
-```
 
 
 
