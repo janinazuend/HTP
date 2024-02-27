@@ -1,5 +1,5 @@
 ---
-title: "High-throughput testing of drugs"
+title: "Figure 4: High-throughput testing of drugs"
 output: html_document
 date: '2023-04-27'
 ---
@@ -44,25 +44,16 @@ HTP <-readRDS("P:/Shared_documents/Former members/Serafina Plüss/13_High-through
 
 ### Get and update metadata file
 ```{r, echo=FALSE}
-
 HTP%>%
   physeq_add_metadata(physeq = .,
                       metadata = "P:/Shared_documents/Former members/Serafina Plüss/13_High-throughput_JANINA_part2/03_sequencing_data/mapping_file_updated.xlsx" %>%
                         readxl::read_xlsx(),
                       sample_column = "sample_name") -> HTP
-
-
-
-
+#modifications medtadata
 meta_htp<-sample.data.frame(HTP)
-
 meta_htp$donor <- recode_factor(meta_htp$donor, "FDS" = "WPL")
-
-
-
 meta_htp$inoculation<-factor(meta_htp$inoculation, levels = c("0.1", "0.01", "feces"))
 meta_htp$incubation<-factor(meta_htp$incubation, levels = c("24h", "48h", "feces"))
-
 sample_data(HTP)<-meta_htp
 ```
 
@@ -86,16 +77,14 @@ ps_strain_filt <- ps_strain_filt %>%
 ps_strain_filt%>% 
   phyloseq_check_lib_size(data_color = "experiment",
                           data_facet = NULL,
-                          nreads_display = 1556,
+                          nreads_display = 4129,
                         first_n = nsamples(HTP)) -> lib
 
 ```
 
 
 
-### Rarefaction
-it is recommended to do rarefaction for alpha and beta diversity analysis
-
+# Rarefaction
 ```{r}
 ps_strain_filt %>%
   rarefy_even_depth(rngseed = 123,
@@ -105,9 +94,7 @@ ps_strain_filt %>%
   subset_samples(!donor %in% "WDR")-> HTP_rare
 ```
 ##Alpha diversity
-
 ```{r}
-# unload("mia")
 #alpha diversity
 HTP_rare%>%
   phyloseq_alphas(phylo = TRUE) -> alphas
@@ -115,7 +102,6 @@ HTP_rare%>%
 
 
 ```{r}
-x<-paste("OBSERVED_alpha diversity.jpg")
 title<-paste("Alpha diversity")
 
 alphas%>%
@@ -124,19 +110,38 @@ alphas%>%
                            "DMSO",
                           "ciprofloxacin",
                           "omeprazole",
-                          "5-FU"))->alphas_drugs
+                          "5-FU"))%>%
+  mutate(vehicle ="water")%>%
+  mutate(vehicle = ifelse(treatment %in% c("DMSO", "omeprazole"), "DMSO", vehicle))%>%
+  mutate(treatment = ifelse(treatment == "DMSO", "control", treatment ))->alphas_drugs
 
-alphas_drugs$treatment<-factor(alphas_drugs$treatment, levels=c("control", "DMSO","omeprazole",
+alphas_drugs$treatment<-factor(alphas_drugs$treatment, levels=c("control", "omeprazole",
                           "ciprofloxacin","5-FU"))
 
 alphas_drugs$sample_type <-factor(alphas_drugs$sample_type, levels=c("feces", "culture"))
+cond<-unique(alphas_drugs$treatment)
+
+for (i in 1:length(cond)){
+  alphas_drugs%>%
+    subset(treatment %in% cond[i])->t
+
+  t%>%
+    shapiro_test(observed) -> x
+
+ show(x)
+  }
+
 
 alphas_drugs%>%
-  wilcox_test(observed ~ treatment, ref.group = "control")
+  group_by(vehicle)%>%
+  t_test(observed ~ treatment, ref.group = "control")%>%
+  add_xy_position(x= "treatment", fun="max") %>% 
+  add_significance()%>%
+  mutate(xmax = ifelse(group2 == "ciprofloxacin", 2, xmax))%>%
+  mutate(xmax = ifelse(group2 == "5-FU", 3, xmax))-> stat.test
+
 
 alphas_drugs%>%
-  mutate(vehicle ="water")%>%
-  mutate(vehicle = ifelse(treatment %in% c("DMSO", "omeprazole"), "DMSO", vehicle))%>%
   ggplot(aes(x = treatment,
              y = observed)) +
   geom_boxplot(aes(group=treatment), outlier.shape = NA) +
@@ -153,12 +158,17 @@ alphas_drugs%>%
         panel.background = element_rect(fill="white"),
         panel.border=element_rect(fill=NA), axis.ticks.x=element_blank())+
   ggtitle(title)+
-  scale_x_discrete(labels = c('control' = expression(H[2]*O), 'omeprazole' = 'Omeprazole', 'ciprofloxacin' = 'Ciprofloxacin', "5-FU"="5-FU"))+
+  ylim(0,130)+
+  scale_x_discrete(labels = c('control' = expression(H[2]*O), 
+                              'omeprazole' = 'Omeprazole', 
+                              'ciprofloxacin' = 'Ciprofloxacin', 
+                              "5-FU"="5-FU"))+
   labs(colour="Donor")+
-  facet_grid(cols=vars(vehicle), scales="free", space="free")->alpha
+  facet_grid(cols=vars(vehicle), scales="free", space="free")+
+  stat_pvalue_manual(stat.test, hide.ns = F, label = "p.adj.signif", size=5, label.size = 8)->alpha
 
-# show(alpha)
-show(alpha+ theme(legend.position = "none"))
+show(alpha)
+
 
 ggsave(filename = "alpha_drugs_dmso..jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
@@ -166,29 +176,24 @@ ggsave(filename = "alpha_drugs_dmso..jpeg",
        height = 14,
        units = c("cm"))
 
-51.7/14*8.5
 ```
 
 ```{r}
-x<-paste("OBSERVED_alpha diversity.jpg")
 title<-paste("Alpha diversity")
 
 alphas%>%
   subset(experiment %in% c("HTP"))%>%
-  # subset(treatment %in% c("control", "DMSO"))->alphas_drugs
   subset(treatment %in% c( "control",
                           "DMSO"))->alphas_drugs
 
 alphas_drugs$treatment<-factor(alphas_drugs$treatment, levels=c("control", "DMSO"))
-
 alphas_drugs$sample_type <-factor(alphas_drugs$sample_type, levels=c("feces", "culture"))
-
 
 alphas_drugs%>%
   ggplot(aes(x = treatment,
              y = observed)) +
   geom_boxplot(aes(group=treatment), outlier.shape = NA) +
-  geom_point(aes(colour =donor, group=treatment), position= position_jitterdodge(0.3), alpha=0.75,   size = 3)+
+  geom_point(aes(colour =donor, group=treatment), position= position_jitterdodge(0.3), alpha=0.75,   size = 6)+
   ylab("Observed ASVs") + xlab(NULL) +
   theme(axis.text.y= element_text(size = 20), 
             axis.title.y = element_text(size=20), 
@@ -204,111 +209,16 @@ alphas_drugs%>%
   labs(colour="Donor")->alpha
 
 show(alpha)
-# show(alpha+ theme(legend.position = "none"))
 
 ggsave(filename = "alpha_dmso.jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
        width = 14,
        height = 17,
        units = c("cm"))
-
-
-# alpha %>%
-#   ggpubr::get_legend() %>%
-#   ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
-#  
-#  
-#  ggsave(filename = "alpha_legend_drugs.jpeg",
-#        path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up_2/output_seq",
-#        width = 17,
-#        height = 14,
-#        units = c("cm"))
-
-51.7/14*14.7
-```
-
-##Barplots
-
-### Compositional bar plots for each donor
-
-```{r}
-# phylo_C@otu_table
-# 
-# phylo_C@tax_table
-
-
-noNA = !is.na(tax_table(HTP_rare)[,"Genus"]) & !is.na(tax_table(HTP_rare)[,"Species"])
-tax_table(HTP_rare)[noNA][,"Species"] = paste(tax_table(HTP_rare)[noNA][,"Genus"], tax_table(HTP_rare)[noNA][,"Species"])
-
-HTP_rare%>%
-  tax_fix()->HTP_rare
-  
-noNA = !is.na(tax_table(HTP)[,"Genus"]) & !is.na(tax_table(HTP)[,"Species"])
-tax_table(HTP)[noNA][,"Species"] = paste(tax_table(HTP)[noNA][,"Genus"], tax_table(HTP)[noNA][,"Species"])
-
-HTP%>%
-  tax_fix()->HTP
-  
-# tax_fix_interactive(fix)
-```
-
-##Bar plots: Drug
-```{r}
-HTP_rare%>%
-  subset_samples(experiment %in% "HTP")%>%
-  subset_samples(treatment %in% c("feces","control",
-                          "DMSO",
-                          "metformin",
-                          "ciprofloxacin",
-                          "omeprazole",
-                          "5-FU"))-> HTP_drugs
-
-
-meta_htp<-sample.data.frame(HTP_drugs)
-meta_htp$treatment<-factor(meta_htp$treatment, levels = c("feces","control",
-                          "DMSO",
-                          "metformin",
-                          "ciprofloxacin",
-                          "omeprazole",
-                          "5-FU"))
-sample_data(HTP_drugs)<-meta_htp
-
-HTP_drugs%>%
-  ps_arrange(treatment)%>%
-  microViz::comp_barplot(
-    tax_level = "Family",
-    label = "treatment",
-    n_taxa = 19,
-    bar_width = 0.9,
-    sample_order = "default",
-    tax_transform_for_plot = "compositional") +
-    ylab("Composition") + xlab( "")-> p_hist
-# +scale_x_discrete(labels = c('feces' = 'feces', '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "GMM like"="GMM like", "BHI like", "7C-Muc"="6C", "3C"="3C", "H2O"=expression(paste(H[2]*O)), "Glc"="glucose")) -> p_hist
-
-p_hist + facet_grid(~donor, scales = "free_x", space = "free_x", drop = TRUE)+
-  theme(axis.text.x = element_text(size=20, angle=90, vjust=0.2, hjust=1, margin=margin(-8,0,0,0)),
-        axis.ticks.x = element_blank(),strip.text = element_text(size  = 20),
-          axis.text.y= element_text(size = 20), 
-        axis.title.y = element_text(size=20), 
-        axis.title.x = element_text(size=20),
-        legend.text = element_text(size = 20, vjust=1, hjust=0),
-        legend.title = element_text(size= 20),
-        plot.title = element_text(size=20), panel.spacing = unit(0.2, "cm")) + scale_y_continuous(breaks=c(0.25, 0.5, 0.75))+ ggtitle("Taxonomic distribution and ASV representation in cultures and feces")-> p_hist
-
-show(p_hist+ theme(legend.position = "none"))
-
-
-ggsave(filename = "drugs_bar.jpeg",
-       path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up_2/output_seq",
-       width = 50,
-       height = 20,
-       units = c("cm"))
 ```
 
 ##Beta-div: drugs
-
 ```{r}
- # library(plyr)
 dist = "bray"
 # dist = "jaccard"
 ord_meths = c("PCoA")
@@ -337,9 +247,6 @@ pdataframe = ldply(plist, function(x){
 
 names(pdataframe)[1] = "method"
 
-
-  
-  x<-paste("Bray Curtis dissimilarity.jpg")
   title<-paste("Bray-Curtis dissimilarity")
   
 
@@ -360,8 +267,7 @@ names(pdataframe)[1] = "method"
         plot.title = element_text(size=20), panel.background = element_rect(fill="white"),
         panel.border=element_rect(fill=NA))+
    xlab("PCoA1") + ylab("PCoA2")+labs(shape="Condition", colour="Donor", fill="Condition")->p
-  
-  # show(p+ theme(legend.position = "none"))
+
   p
   
   ggsave(filename = "Beta_diversity_drugs.jpeg",
@@ -369,27 +275,11 @@ names(pdataframe)[1] = "method"
        width = 18,
        height = 14,
        units = c("cm"))
-
-   # p %>%
-#   ggpubr::get_legend() %>%
-#   ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
-# 
-# ggsave(filename = "Beta_diversity_legend_proteins.jpeg",
-#        path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up_2/output_seq",
-#        width = 14,
-#        height = 18,
-#        units = c("cm"))
-#   
-     63.5/17*18
 ```
 
 
 ## Distance plots of pairwise comparisons
-
 ```{r}
-# unload("dplyr")
-# library(tidyverse)
-#  library(dplyr)
 HTP_rare %>%
   subset_samples(experiment %in% c("HTP"))%>%
   subset_samples(treatment %in% c("control",
@@ -447,6 +337,33 @@ joined_3%>%
   subset(match %in% "true")->sub
 
 
+conidition_cond<-c("5-FU", "ciprofloxacin", "omeprazole")
+
+for (i in 1:3) {
+sub%>%
+  subset(condition_comp %in% conidition_cond[i])-> shap  
+ print(shapiro_test(shap$value))
+}
+
+
+
+sub%>%
+  t_test(data =., value ~ condition_comp)%>%
+  add_significance()%>%
+  add_xy_position()%>%
+    
+   mutate(xmin = ifelse(group1 == "5-FU" & group2 =="ciprofloxacin" , 2 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "5-FU" & group2 =="ciprofloxacin",3, xmax))%>%
+  mutate(y.position = ifelse(group1 == "5-FU" & group2 =="ciprofloxacin",1.3, y.position))%>% 
+  
+    mutate(xmin = ifelse(group1 == "5-FU" & group2 =="omeprazole", 1 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "5-FU" & group2 =="omeprazole",3, xmax))%>%
+  mutate(y.position = ifelse(group1 == "5-FU" & group2 =="omeprazole", 1.1, y.position)) %>%
+  
+  mutate(xmin = ifelse(group1 == "ciprofloxacin" & group2 =="omeprazole", 1 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "ciprofloxacin" & group2 =="omeprazole",2, xmax))%>%
+  mutate(y.position = ifelse(group1 == "ciprofloxacin" & group2 =="omeprazole", 0.9, y.position))-> stat.test
+
 sub$condition_comp<-factor(sub$condition_comp, levels= c("control",  "omeprazole", "ciprofloxacin", "5-FU"))
 
 sub%>%
@@ -466,31 +383,19 @@ sub%>%
         axis.ticks.x = element_blank(), panel.background = element_rect(fill="white"),
         panel.border=element_rect(fill=NA)
         )+
-  # stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif")+
   scale_x_discrete(labels = c('ciprofloxacin' = 'Ciprofloxacin', 'omeprazole' = 'Omeprazole'))+
   ggtitle("Distance to control")+
   ylab("Bray-Curtis distance")+
-  labs(colour="Donor")->p
+   stat_pvalue_manual(stat.test, hide.ns = F, label = "p.adj.signif", size=5, label.size = 8)+
+  labs(colour="Donor")+
+  ylim(0,1.4)->p
 
-show(p+ theme(legend.position = "none"))
+show(p)
   
   ggsave(filename = "Beta_diversity_dist_drugs.jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
        width = 7.5,
        height = 14,
        units = c("cm"))
-# 
- p %>%
-ggpubr::get_legend() %>%
-ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
-# 
-ggsave(filename = "Beta_diversity_legend.jpeg",
-path = "C:/Users/zuendj/Desktop/03_data R/wp1/follow_up/output_seq",
- width = 14,
- height = 17,
-units = c("cm"))
-
-63.5/17*7.5
-
 ```
 
