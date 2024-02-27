@@ -1,5 +1,5 @@
 ---
-title: "C-sources & 8 donors"
+title: "Figure 3: C-sources & 8 donors"
 ---
 
 ## Set up
@@ -9,7 +9,8 @@ myfunctions = "C:/Users/zuendj/Desktop/03_data R/divcom_functions/R"
 .libPaths(mylib)
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(echo = TRUE, warning = FALSE, message = FALSE)
-# 
+
+# devtools::install_github("tidyverse/tidyverse") 
 # library(phyloseq)
 # library(tidyverse)
 # library(openxlsx)
@@ -18,6 +19,7 @@ knitr::opts_knit$set(echo = TRUE, warning = FALSE, message = FALSE)
 # library(ggpubr)
 # library(plyr)
 # library(ggpmisc)
+# library(cowplot)
 ```
 
 ```{r}
@@ -39,7 +41,6 @@ facet_labeller <- function(variable,value){
   return(names[value])
 }
 ```
-
 ## Get the phyloseq object 
 ```{r}
 phyloseq <-readRDS("P:/Shared_documents/Former members/Serafina Plüss/20230320_sequencing_results/Janina/dada2/phyloseq_phylo/phyloseq_phylo.RDS")%>%
@@ -50,15 +51,13 @@ phyloseq <-readRDS("P:/Shared_documents/Former members/Serafina Plüss/20230320_s
                         readxl::read_xlsx(),
                       sample_column = "sample_name")
 ```
-
 ## Filter 
 ```{r, echo=FALSE}
-# threshold in %
+# threshold in % to remove spurious ASVs
 threshold = 0.1
 
 # filter per sample to remove all ASV lower in abundance than threshold (%)
 ps_strain_filt<-phyloseq
-# filter per sample to remove all ASV lower in abundance than threshold (%)
 otu_table(phyloseq) %>%
   as.data.frame() %>%
   dplyr:: mutate(across(everything(), ~ ifelse(. <= sum(.) * (threshold/100), 0, .))) %>% 
@@ -85,25 +84,37 @@ phyloseq_rare%>%
   subset_samples(condition %in% c("feces", "7C", "3C+Muc","7C-Muc" , "3C" , "Glc" ,  "H2O" 
                                      , "BHI like", "GMM like"))->phyloseq_rare
 ```
-
 ##  Alpha diversity
-
 ```{r}
 #alpha diversity
 phyloseq_rare%>%
   phyloseq_alphas(phylo = TRUE) -> alphas
 ```
-
 ```{r}
 
 alphas%>%
   gather(index, alpha_value, "observed":"diversity_shannon")%>%
   mutate(index = factor(index, levels= c("observed", "diversity_shannon")))%>%
+  group_by(index, condition)%>%
+  shapiro_test(alpha_value)
+
+#shannon is not normal for 3C and BHI like => should be wilcox test but conditions are anyway not significant 
+alphas%>%
+   mutate(condition = factor(condition, levels =c("feces", "7C",   "3C+Muc", "7C-Muc" , "3C" ,   "Glc"  ,"H2O"
+                                                 ,"BHI like", "GMM like"
+                                                 )))%>%
+  gather(index, alpha_value, "observed":"diversity_shannon")%>%
+  mutate(index = factor(index, levels= c("observed", "diversity_shannon")))%>%
   group_by(index)%>%
-  wilcox_test(alpha_value ~ condition, ref.group = "feces")
+  t_test(alpha_value ~ condition)%>%
+  add_xy_position(x= "condition", fun="max") %>% 
+  add_significance()%>%
+  mutate(y.position =ifelse(index=="observed" & group1=="feces" & group2=="Glc", 160, y.position))%>%
+  mutate(y.position =ifelse(index=="observed" & group1=="feces" & group2=="3C", 140, y.position))%>%
+  mutate(y.position =ifelse(index=="diversity_shannon" & group1=="feces" & group2=="Glc", 4.5, y.position))-> stat.test
+
 
 title<-paste("Alpha diversity")
-
 names<-list("observed"= "Observed", "diversity_shannon"="Shannon")
 
 alphas%>%
@@ -119,6 +130,8 @@ alphas%>%
   geom_point(aes(colour =donor_name, group=condition), position= position_jitterdodge(0.3), alpha=0.75,   size = 3)+
   ylab("Diversity") + 
   xlab(NULL) +
+  geom_point(data = data.frame(alpha_value=5, condition="feces", index ="diversity_shannon"), colour="white")+
+  geom_point(data = data.frame(alpha_value=175, condition="feces", index ="observed"), colour="white")+
   theme(axis.text.y= element_text(size = 20), 
             axis.title.y = element_text(size=20), 
             axis.title.x = element_text(size=20),
@@ -130,7 +143,18 @@ alphas%>%
         panel.background = element_rect(fill="white"),
         panel.border=element_rect(fill=NA), axis.ticks.x = element_blank())+
   ggtitle(title)+
-  scale_x_discrete(labels = c('feces' = 'Feces', '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "Nut"="Nut", "SS"="SS", "7C-Muc"="6C", "3C"="3C", "H2O"="C-depleted", "Glc"="Glucose", "BHI like" = "BHI-like", "GMM like"= "GMM-like"))+
+  scale_x_discrete(labels = c('feces' = 'Feces', 
+                              '7C' = '6C+Muc', 
+                              '3C+Muc' = '3C+Muc', 
+                              "Nut"="Nut", 
+                              "SS"="SS",
+                              "7C-Muc"="6C", 
+                              "3C"="3C", 
+                              "H2O"="C-depleted", 
+                              "Glc"="Glucose", 
+                              "BHI like" = "BHI-like", 
+                              "GMM like"= "GMM-like"))+
+  stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif", size=5, label.size = 8)+
   labs(colour="Donor")->alpha
 
 show(alpha)
@@ -140,8 +164,6 @@ ggsave(filename = "alpha_c.jpeg",
        width = 17,
        height = 17,
        units = c("cm"))
- 
- 63.5/17*14
 ```
 
 ```{r}
@@ -159,7 +181,6 @@ tax_table(phyloseq_rare)[noNA][,"Species"] = paste(tax_table(phyloseq_rare)[noNA
 phyloseq_rare%>%
   tax_fix()->phyloseq_rare
 ```
-
 
 ```{r}
 meta<-sample.data.frame(phyloseq_rare)
@@ -213,28 +234,14 @@ p_hist + facet_grid(cols=vars(donor_name), scales = "free", space = "free_x", dr
   scale_y_continuous(breaks=c(0.25, 0.5, 0.75))+ 
   ggtitle("Taxonomic distribution and ASV representation in cultures and feces")-> p_hist
 
-show(p_hist+ theme(legend.position = "none"))
+show(p_hist)
 
 ggsave(filename = "Barplots_family_noleg.png",
        path = mydir,
        width = 40,
        height = 15,
        units = c("cm"))
-
-p_hist %>%
-  ggpubr::get_legend() %>%
-  ggpubr::as_ggplot() + theme_classic() -> vulcano_legend
-
-ggsave(filename = "Barplot_legend.jpeg",
-       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
-       width = 14,
-       height = 17,
-       units = c("cm"))
-
-63.5/17*40
-63.5/17*15
 ```
-
 ## Distance plots of pairwise comparisons
 ```{r}
 phyloseq_rare %>%
@@ -271,19 +278,52 @@ for (i in 1:nrow(joined_3)){
   if (joined_3[i,c("donor_name")] == joined_3[i,c("donor_name_comp")]){joined_3[i,c("match")]= "true"}
 }
 
-
 joined_3%>%
   subset(match %in% "true")%>%
   mutate(condition_comp = factor(condition_comp, 
                                  levels=c("feces", "7C",   "3C+Muc", "7C-Muc" , "3C" ,   "Glc"  ,"H2O"
                                           , "BHI like", "GMM like"
                                           )))-> beta_dist_c_sources
+conidition_cond<-unique(beta_dist_c_sources$condition)
+
+for (i in 1:8) {
+beta_dist_c_sources%>%
+  subset(condition %in% conidition_cond[i])->sub  
+ print(shapiro_test(sub$value))
+}
+
+
+  
 
 beta_dist_c_sources%>%
-  wilcox_test(data =., value ~ condition)
+  t_test(data =., value ~ condition)%>%
+  add_significance()%>%
+  add_xy_position() %>%
 
-beta_dist_c_sources$value
-
+###reordering of the significance labels
+     mutate(xmin = ifelse(group1 == "7C" & group2 =="H2O", 1 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "7C" & group2 =="H2O",6, xmax))%>%
+  mutate(y.position = ifelse(group1 == "7C" & group2 =="H2O",1, y.position))%>%
+  
+  mutate(xmin = ifelse(group1 == "3C+Muc" & group2 =="H2O", 2 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "3C+Muc" & group2 =="H2O",6, xmax))%>%
+  mutate(y.position = ifelse(group1 == "3C+Muc" & group2 =="H2O",1.05, y.position))%>%
+  
+    mutate(xmin = ifelse(group1 == "7C-Muc" & group2 =="H2O", 3 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "7C-Muc" & group2 =="H2O",6, xmax))%>%
+  mutate(y.position = ifelse(group1 == "7C-Muc" & group2 =="H2O", 1.1, y.position))%>%
+  
+   mutate(xmin = ifelse(group1 == "3C" & group2 =="H2O" , 4 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "3C" & group2 =="H2O",6, xmax))%>%
+  mutate(y.position = ifelse(group1 == "3C" & group2 =="H2O",1.15, y.position))%>% 
+  
+    mutate(xmin = ifelse(group1 == "BHI like" & group2 =="H2O", 6 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "BHI like" & group2 =="H2O",7, xmax))%>%
+  mutate(y.position = ifelse(group1 == "BHI like" & group2 =="H2O", 1.2, y.position)) %>%
+  
+  mutate(xmin = ifelse(group1 == "GMM like" & group2 =="H2O", 6 ,xmin))%>%
+  mutate(xmax = ifelse(group1 == "GMM like" & group2 =="H2O",8, xmax))%>%
+  mutate(y.position = ifelse(group1 == "GMM like" & group2 =="H2O", 1.25, y.position))->stat.test
 
 beta_dist_c_sources%>%
   ggplot(aes(y=value, x=condition_comp))+
@@ -307,6 +347,7 @@ beta_dist_c_sources%>%
   scale_x_discrete(labels = c('feces' = 'Feces', '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "Nut"="Nut", "SS"="SS", "7C-Muc"="6C", "3C"="3C", "H2O"="C-depleted", "Glc"="Glucose", "BHI like" = "BHI-like", "GMM like"= "GMM-like"))+
   ggtitle("Distances between feces and cultures")+
   ylab("Distance")+
+  stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif", size=5, label.size = 8)+
   labs(colour="Donor")->p
 
   show(p)
@@ -316,11 +357,10 @@ beta_dist_c_sources%>%
        width = 17,
        height = 17,
        units = c("cm"))
-63.5/17*14
 ```
 
 ```{r}
- aggregate(beta_dist_c_sources$value, by=list(beta_dist_c_sources$condition), FUN=median)%>%
+aggregate(beta_dist_c_sources$value, by=list(beta_dist_c_sources$condition), FUN=median)%>%
   mutate(x = round(x, digits=2))
 ```
 
@@ -413,25 +453,23 @@ maintain%>%
   facet_grid(cols=vars(donor_name), scales="free_x", space = "free_x")+
   xlab("")+
   ylab("ASV representation[%]")+
-  ggtitle("ASV representation in cultures and feces")+
   scale_x_discrete(labels = c('feces' = 'Feces', '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "Nut"="Nut", "SS"="SS", "7C-Muc"="6C", "3C"="3C", "H2O"="C-depleted", "Glc"="Glucose", 
                                "BHI like" = "BHI-like", "GMM like"= "GMM-like"
                               ))+
   scale_y_continuous(breaks=c(25, 50, 75))+
   scale_fill_manual(values=c("grey","burlywood4", "cyan4"))+
   theme(text=element_text(size=20),
-        axis.text.x = element_text(size=17, angle=90, vjust=0.5, hjust=1),
+        axis.text.x = element_text(size=17, angle=90, vjust=0.3, hjust=1),
         axis.text.y = element_text(size=20),
         axis.title.y = element_text(size=20),
         axis.ticks.x = element_blank(),
-        strip.text.x = element_text(),
+        strip.text.x = element_blank(),
         axis.title.x = element_blank(), 
         panel.spacing = unit(0.05, "cm"),
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(), 
         panel.background = element_blank())+
-  labs(fill= "Sample")+ 
-  ggtitle("ASV representation in cultures and feces")->p
+  labs(fill= "Sample")->p
 
 
 
@@ -450,135 +488,26 @@ p+labs(fill= "ASV representation")+ ggtitle("")+theme(legend.position = "none")
        width = 39.3,
        height = 10,
        units = c("cm"))
-    
 
-       51.7/14*39
-       51.7/14*10
-       
-63.5/17*39.3
 
 ```
-
-
-## Abundance of Prevotellaceae
+# Combine taxa bar plots & shared ASVs plot
 ```{r}
-phyloseq_rare%>%
-  physeq_glom_rename(taxrank = "Family", 
-                     speedyseq = TRUE)%>%
-  microbiome::transform("compositional") %>% 
-  psmelt() %>%
-  subset(Family %in% c("Lachnospiraceae","Bacteroidaceae","Enterobacteriaceae","Prevotellaceae","Ruminococcaceae","Bifidobacteriaceae","Oscillospiraceae","Streptococcaceae","Sutterellaceae","Erysipelatoclostridiaceae"))->abundance_family
+plot_grid(p_hist           + theme(axis.text.x = element_blank(),
+                        axis.ticks.x  = element_blank())
+          , 
+          p          + theme(strip.text = element_blank())
+         ,
+  align= "v", rel_heights = c(0.6,0.4), rel_widths=c(1,1), nrow=2, axis = 'tb')
 
-
-abundance_family%>%
-  subset(OTU %in% "Prevotellaceae" & donor_name %in% "JHB" )->prevo
-
-aggregate(prevo$Abundance, by=list(prevo$sample_type), FUN=mean)%>%
-  mutate(x = round(x*100, 1))
-
-abundance_family%>%
-  subset(OTU %in% "Enterobacteriaceae" & condition %in% c("7C"))
-
-
-phyloseq_rare%>%
-  physeq_glom_rename(speedyseq = TRUE)%>%
-  microbiome::transform("compositional") %>% 
-  psmelt() ->abundance_genus
-
-write.xlsx(abundance_genus, "C:/Users/zuendj/Desktop/03_data R/wp1/output/final/abundances_genus.xlsx", sheetName = "Rel_abund_Genus")
-
-
-write.xlsx(abundance_family[, c("OTU", "Abundance", "donor_name", "condition")] , "C:/Users/zuendj/Desktop/03_data R/wp1/output/final/abundances.xlsx", append = T, sheetName = "Rel_abund_Family")
-  
-```
-
-
-### CLR abundances of enterobacteriaceae
-```{r}
-phyloseq_rare%>%
-  physeq_glom_rename(taxrank = "Family", 
-                     speedyseq = TRUE)%>%
-   microbiome::transform("clr") %>% 
-   psmelt()%>%
-  left_join(setNames(aggregate(df_abund$Abundance, by=list(df_abund$Family), FUN = "mean"), #add mean over all donors for sorting
-                     c("Family", "abund")))%>%
-  mutate(Family = as.factor(Family))%>%
-  subset(Family %in% c("Enterobacteriaceae"))->clr_entero
-
-
-clr_entero%>%
-  ggplot(aes(x=Abundance, y=condition))+
-  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey", size=1)+
-   geom_boxplot( outlier.shape = NA)+
-  geom_jitter(aes(colour=donor_name), position = position_jitterdodge(0.01) ,size=3, alpha=0.75)+
-   # scale_fill_manual(values = c( "cyan4" , "darkgoldenrod1"),
-   #                      labels = c(  "5-FU","Ciprofloxacin"), 
-   #                     name="Drug")+
-   theme(text= element_text(size = 20), 
-              panel.background = element_rect(fill="white"),
-         panel.border=element_rect(fill=NA))+
-      ylab("")+
-  xlab("Clr-abundances")+
-  labs(colour="Donor")+
-  facet_grid(cols=vars(Family), scales="free")+
-  scale_y_discrete(labels = c('feces' = 'Feces', '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "Nut"="Nut", "SS"="SS", "7C-Muc"="6C", "3C"="3C", "H2O"="C-depleted", "Glc"="Glucose", "BHI like" = "BHI-like", "GMM like"= "GMM-like"))
-
-
-
-ggsave(filename = "clr_facultaive_anaerobes.png",
+ ggsave(filename = "C_sources_overall.jpeg",
        path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
-       width = 17,
-       height = 14,
+       width = 50,
+       height = 24,
        units = c("cm"))
 
-clr_entero%>%
-  subset(Family %in% "Enterobacteriaceae")%>%
-  subset(sample_type %in% "feces")->feces
-
-##calculating teh difference
-clr_entero%>%
-  subset(Family %in% "Enterobacteriaceae")%>%
-  subset(sample_type %in% "culture")%>%
-  left_join(setNames(feces[, c("donor_name", "Abundance")], c("donor_name", "Abundance_feces")))%>%
-  mutate(clr_diff =  Abundance - Abundance_feces)-> diff
-
-diff%>%
- mutate(Family = fct_reorder(Family, abund))%>%
-  ggplot(aes(x=clr_diff, y=condition))+
-  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey", size=1)+
-   geom_boxplot( outlier.shape = NA)+
-  geom_jitter(aes(colour=donor_name), position = position_jitterdodge(0.01) ,size=3, alpha=0.75)+
-   theme(text= element_text(size = 20), 
-         strip.text.x = element_blank(),
-         plot.title = element_text(size=20),
-         axis.title = element_text(size=20),
-         axis.text = element_text(size=20),
-         panel.background = element_rect(fill="white"),
-         panel.border=element_rect(fill=NA))+
-      ylab("")+xlab("Differences in clr-abundances")+
-  labs(colour="Donor")+
-  ggtitle(expression(paste(italic("Enterobacteriaceae"), " levels")))+
-  facet_grid(cols=vars(Family), scales="free")+
-  scale_y_discrete(labels = c('feces' = 'Feces', '7C' = '6C+Muc', '3C+Muc' = '3C+Muc', "Nut"="Nut", "SS"="SS", "7C-Muc"="6C", "3C"="3C", "H2O"="C-depleted", "Glc"="Glucose", "BHI like" = "BHI-like", "GMM like"= "GMM-like"))->p
-
-show(p )
-  # stat_pvalue_manual(stat.test,  label = "p.adj.signif", label.size = 8)
-
-ggsave(filename = "enterobacteroidaceae..png",
-       path = "C:/Users/zuendj/Desktop/03_data R/wp1/output/final",
-       width = 17,
-       height = 14,
-       units = c("cm"))
-
-
-51.7/14*17
-65.3/17*35
 ```
 
-```{r}
-aggregate(diff$clr_diff, by=list(diff$condition), FUN="median")%>%
-  mutate(x = round(x, 1))
-```
 
 
 
