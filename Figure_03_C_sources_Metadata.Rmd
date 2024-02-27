@@ -1,9 +1,9 @@
 ---
-title: "WP1_follow_up"
+title: "Figure 3: C sources metadata anlysis"
 output: html_document
 date: '2023-03-08'
 ---
-
+# Please be aware that this is a reserach code and far from perfect ;P
 ```{r setup, include=FALSE}
 .libPaths('C:\\Users\\zuendj\\Documents\\R4Libs')
 knitr::opts_chunk$set(echo = TRUE)
@@ -162,25 +162,18 @@ cultures%>%
   gather(scfa, rel_conc, "succinate":"butyrate")->sub
 
 
-cond<-unique(sub$condition)
+  sub%>%
+    group_by(scfa, condition)%>%
+    group_by(condition)%>%
+    shapiro_test(rel_conc) 
 
-# for (i in 1:length(cond)){
-#   sub%>%
-#     subset(condition %in% cond[i])->t
-# 
-#   t%>%
-#     subset(scfa %in% "rel_formate")%>%
-#     shapiro_test(rel_conc) -> x
-#   
-#  show(x)}
-aggregate(sub$rel_conc, by=list(sub$condition, sub$scfa), FUN="sd")
 
 
 sub %>%
 group_by(scfa) %>%
   subset(condition %in% c("H2O", "Nut", "SS"))%>%
   subset(scfa %in% c("acetate", "butyrate", "propionate"))%>%
-wilcox_test(data =., rel_conc ~ condition)->wil
+  wilcox_test(data =., rel_conc ~ condition)->wil
 
 
 stat.test <- wil %>% add_xy_position(x= "scfa", fun="max") %>% add_significance()
@@ -206,7 +199,7 @@ sub%>%
         panel.border=element_rect(fill=NA),
         legend.text.align = 0)+
   scale_x_discrete(labels=c("Acetate", "Butyrate", "Propionate"))+
-  stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif", label.size = 8)->p
+  stat_pvalue_manual(stat.test, hide.ns = T, label = "p.adj.signif", label.size = 5)->p
 
 
 show(p+ theme(legend.position = "none"))

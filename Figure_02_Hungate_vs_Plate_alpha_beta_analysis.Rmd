@@ -1,7 +1,7 @@
 ---
 title: "16S rRNA analysis in Hungate Tubes and 96-deep wells"
 ---
-
+# Please be aware that this is a reserach code and far from perfect ;P! Cheers
 ## Set up
 ```{r setup, include=FALSE}
 mylib = 'C:\\Users\\zuendj\\Documents\\R4Libs'
@@ -18,7 +18,7 @@ knitr::opts_knit$set(echo = TRUE, warning = FALSE, message = FALSE)
 # library(rstatix)
 # library(ggpubr)
 # library(plyr)
-library(ggpmisc)
+# library(ggpmisc)
 ```
 
 ```{r}

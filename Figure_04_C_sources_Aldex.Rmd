@@ -1,109 +1,43 @@
 ---
-title: "C-sources & 8 donors"
+title: "Figure 4: Aldex C-sources & 8 donors"
 ---
-
-Link to Florentin's github page: https://htmlpreview.github.io/?https://github.com/fconstancias/DivComAnalyses/blob/master/SOP/community_analyses/Microbiome_R_tutorial.html#alpha-diversity
-
-1. Getting ready: load all packages
--newest version of R
--rtools required 
-
-
+# Please be aware that this is a reserach code and far from perfect ;P Cheers!
 ```{r setup, echo =FALSE}
 .libPaths('C:\\Users\\zuendj\\Documents\\R4Libs')
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "P:/Shared_documents/Serafina Pl√ºss/20230320_sequencing_results/Janina", cho = TRUE, warning = FALSE, message = FALSE)
 
-
-
-# install.packages("vctrs")
-# install.packages("vegan")
-# install.packages("cli")
-
-# library(vctrs)
-# library(vegan)
-# install.packages("ggplot2")
-#library(ggplot2)
-#install.packages('tinytex')
-#install.packages('rmarkdown')
-#install.packages("rlang")
-#install.packages("nlme")
-#install.packages("mgcv")
-#install.packages("ape")
-#library(nlme)
-# install.packages("remotes")
-# remotes::install_github("mikemc/speedyseq")
-# install.packages("BiocManager")
-# BiocManager::install("DESeq2")
-#install.packages("fs")
-# install.packages('devtools')
-#install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
-#unload("mia")
-# install.packages("GUniFrac")
-
-# install.packages(
-#   "microViz",
-#   repos = c(davidbarnett = "https://david-barnett.r-universe.dev", getOption("repos"))
-# )
-# library(microViz)
-
-# devtools::install_github("tidyverse/tidyverse")
 # library(tidyverse)
 # library(openxlsx)
-# # install.packages("ggalluvial")
-# library(ggalluvial)
-# 
-# library(GUniFrac)
+# library(microViz)
 # library(rstatix)
-# library(tinytex)
-# library(rmarkdown)
-# library(rlang)
-# library(tidyverse)
-# library(dplyr)
-# library(mgcv)
-# library(ape)
- # library(phyloseq)
-# library(speedyseq)
-# library(DESeq2)
-# library(plyr)
-# library(fs)
-# library(devtools)
-# library(pairwiseAdonis)
 # library(ggpubr)
+# library(plyr)
+# library(ggpmisc)
+# library(phyloseq)
 
-# install.packages("dplyr")
-# library(metagMisc)
+#load required functions from fconstancias: https://zenodo.org/records/6473394
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_taxa_tests.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_normalisation.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_alpha.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_beta.R") 
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_heatmap.R")
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/phyloseq_taxa_tests.R")
+# source("C:/Users/zuendj/Desktop/03_data R/divcom_functions/R/functions.R")
 
-# devtools::install_github("vmikk/metagMisc")
-```
-
-```{r, echo =FALSE}
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_taxa_tests.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_normalisation.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_alpha.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_beta.R") 
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_heatmap.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_taxa_tests.R")
-source("https://raw.githubusercontent.com/fconstancias/metabaRpipe-source/master/Rscripts/functions.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_varia.R")
-source("https://raw.githubusercontent.com/fconstancias/DivComAnalyses/master/R/phyloseq_beta.R")
-
-#get metadata file: load this function
+#function for getting metadata file
 sample.data.frame <- function(ps) {
   return(as(phyloseq::sample_data(ps), "data.frame"))}
 ```
 
-## 1. Get the phyloseq object 
+## Get the phyloseq object 
 ```{r}
-# unload("mia")
 phyloseq <-readRDS("P:/Shared_documents/Former members/Serafina Pl¸ss/20230320_sequencing_results/Janina/dada2/phyloseq_phylo/phyloseq_phylo.RDS")
-
 phyloseq%>%
   phyloseq_get_strains()->phyloseq
 ```
 
-
-### Get and update metadata file
+## Get and update metadata file
 ```{r, echo=FALSE}
 
 phyloseq%>%
@@ -114,8 +48,6 @@ phyloseq%>%
 
 
 meta<-sample.data.frame(phyloseq)
-
-
 
 ps_strain_filt <- phyloseq
 
@@ -131,14 +63,9 @@ otu_table(ps_strain_filt) <- otu_table(ps_strain_filt) %>%
 # remove all ASVs that are not present in any sample
 ps_strain_filt <- ps_strain_filt %>%
   filter_taxa(function(x) sum(x > 0) > 0, TRUE)
-
-
 ```
 
 ```{r, echo=FALSE}
-#BiocManager::install("microbiome/mia")
-
-
 library(mia)
 library(miaViz)
 library(ALDEx2)
@@ -147,16 +74,15 @@ library(ALDEx2)
 ```{r}
 ps_strain_filt%>%
   subset_samples(experiment %in% "high-throughput")%>%
-  # subset_taxa(Family %in% "Enterobacteriaceae")%>%
-  subset_samples(condition %in% c("feces", "7C",
-                                                 "3C+Muc",
-                                                 "7C-Muc" ,
-                                                 "3C" ,
-                                                 "SS" ,
-                                                 "Nut" ,
-                                                 "Glc" ,
-                                                 "H2O"  
-                                                 ))->C
+  subset_samples(condition %in% c("feces", 
+                                  "7C",
+                                  "3C+Muc",
+                                  "7C-Muc" ,
+                                  "3C" ,
+                                  "SS" ,
+                                  "Nut" ,
+                                  "Glc" ,
+                                  "H2O"  ))->C
 
 enetros <- makeTreeSummarizedExperimentFromPhyloseq(C) 
 
@@ -171,13 +97,13 @@ tse_C <- enetros %>% agglomerateByRank(rank = "Family")
 ```{r}
 
 substrates <-c("7C",
-                                                 "3C+Muc",
-                                                 "7C-Muc" ,
-                                                 "3C" ,
-                                                 "SS" ,
-                                                 "Nut" ,
-                                                 "Glc" ,
-                                                 "H2O" )
+               "3C+Muc",
+               "7C-Muc" ,
+               "3C" ,
+               "SS" ,
+               "Nut" ,
+               "Glc" ,
+               "H2O" )
 
 
 all_C <-data.frame(matrix(ncol=14, nrow=0))
@@ -185,16 +111,10 @@ all_C <-data.frame(matrix(ncol=14, nrow=0))
 for (i in (1:length(substrates))){
   tse_substrates <-tse_C[ , tse_C$condition %in% c(substrates[i], "feces")]
   
-  
-    
-      
       result_name <- paste(substrates[i])
       print(result_name)
       
-      count <- as.vector(tse_substrates$condition)
-     
-     
-     
+      count <- as.vector(tse_substrates$condition) 
       x <- aldex.clr(
       reads = assay(tse_substrates),
      tse_substrates$condition)
@@ -217,42 +137,28 @@ for (i in (1:length(substrates))){
       
       result <-aldex_out
       result[,14] <- result_name
-print(colnames(result))
+      print(colnames(result))
       
       names(result)[6]<-paste0("rab.win.feces")
       names(result)[7]<-paste0("rab.win.cultures")
       result$Family<-row.names(result)
       
       all_C <- rbind(all_C, result)
-      
-     
-      
+                                    
       }
 
 all_C %>%
   subset(Family %in% "Family:Enterobacteriaceae")%>%
   filter(we.ep < 0.05)->out
-
-
-out[,c(1,8,10, 14,15)]
-
-BACKUP<-all
-
-out %>%
-  subset(Family %in% "Family:Enterobacteriaceae") %>%
-  subset(wi.eBH < 0.05)
 ```
 
 ```{r}
 unloadNamespace("miaViz")
 unloadNamespace("mia")
-
 ```
 
 
 ```{r}
-
-# library("dplyr")
 C%>%
   physeq_glom_rename(taxrank = "Family", 
                      speedyseq = TRUE)%>%
@@ -274,12 +180,11 @@ clr_c%>%
 clr_diff<-setNames(as.data.frame(matrix(0,0,4)), c("diff", "Family", "condition", "donor"))
 
 drugs_cond<- c( "7C",
-                                                 "3C+Muc",
-                                                 "7C-Muc" ,
-                                                 "3C" ,
-                                                 
-                                                 "Glc" ,
-                                                 "H2O" )
+                "3C+Muc",
+                "7C-Muc" ,
+                "3C" ,
+                "Glc" ,
+                "H2O" )
 donor_cond<-unique(clr_entero$donor)
 donor_fam<-unique(clr_entero$Family)
 

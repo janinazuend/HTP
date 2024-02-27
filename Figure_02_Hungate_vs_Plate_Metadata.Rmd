@@ -1,6 +1,7 @@
 ---
-title: Metadata analysis - HT vs. 96-deep well 
+title: "Figure 2:  Metadata analysis - HT vs. 96-deep well "
 ---
+# Please be aware that this is a reserach code and far from perfect ;P
 ## Set up
 ```{r setup, include=FALSE}
 mylib = 'C:\\Users\\zuendj\\Documents\\R4Libs'

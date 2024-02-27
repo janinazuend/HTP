@@ -1,6 +1,7 @@
 ---
-title: "Differential abundance on species levels - HT vs. 96-deep well"
+title: "Figure 2: Differential abundance on species levels - HT vs. 96-deep well"
 ---
+# Please be aware that this is a reserach code and far from perfect ;P
 ## Set up
 ```{r setup, include=FALSE}
 mylib = 'C:\\Users\\zuendj\\Documents\\R4Libs'
@@ -10,14 +11,15 @@ myfunctions = "C:/Users/zuendj/Desktop/03_data R/divcom_functions/R"
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(echo = TRUE, warning = FALSE, message = FALSE)
 
-# library(phyloseq)
-# library(tidyverse)
-# library(openxlsx)
-# library(microViz)
-# library(rstatix)
-# library(ggpubr)
-# library(plyr)
-# library(ggpmisc)
+
+library(phyloseq)
+library(tidyverse)
+library(openxlsx)
+library(microViz)
+library(rstatix)
+library(ggpubr)
+library(plyr)
+library(ggpmisc)
 ```
 
 ```{r}
@@ -186,13 +188,23 @@ tse_family <- tse %>% agglomerateByRank(rank = "Family")
 
 
 ```{r}
-    count <- as.vector(tse_family$cultivation_vessel)
+donors <-c("PVFE", "RQPT")
+substrates <-c("SS", "Nut", "basal")
+cultivation <-c("Tube", "Plate")
+
+for (h in (1:length(substrates))){
+for (k in 1:length(donors)){
+          
+    tse_family_sub <-tse_family[ ,tse_family$donor_name %in% c(donors[k]) & tse_family$substrate %in% c(substrates[h])]  
+    
+    
+    count <- as.vector(tse_family_sub$cultivation_vessel)
      n <- length(grep("Tube", count))
      s <- length(count) - length(grep("Tube", count))
      
      
      x <- aldex.clr(
-      reads = assay(tse_family),
+      reads = assay(tse_family_sub),
       conds = c(rep("Tube",n), rep("Plate",s)), 
       # 128 recommened for ttest, 1000 for rigorous effect size calculation
       mc.samples = 1000, 
@@ -207,8 +219,9 @@ tse_family <- tse %>% agglomerateByRank(rank = "Family")
         x_effect <- aldex.effect(x, CI = TRUE, verbose = FALSE)
       aldex_out <- data.frame(x_tt, x_effect)
       
-  
-aldex_out
+  print(substrates[h]) 
+  print(donors[k])
+print(aldex_out[c("Enterobacteriaceae"),]) }}
 ```
 
 ## Calculate the clr differences for visualization
@@ -222,7 +235,11 @@ ps_strain_filt %>%
    psmelt()->df_abund
 
 df_abund[, c("OTU", "Abundance", "donor_name", "cultivation_vessel", "substrate", "triplicate")]%>%
-  subset(OTU %in% "Enterobacteriaceae")%>%
+  subset(OTU %in% "Enterobacteriaceae")->sub
+
+aggregate(sub$Abundance, by=list(sub$cultivation_vessel), FUN=median)
+
+sub%>%
   mutate(cultivation_vessel = factor(cultivation_vessel))%>%
   ggplot(aes(x=cultivation_vessel, y=Abundance))+
   geom_boxplot(outlier.shape = NA)+
